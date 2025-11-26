@@ -7,63 +7,96 @@ The core automation logic resides in Python scripts that parse PDF documents to 
 
 ## Project Structure
 
+### Root Directory
+
+*   **`GEMINI.md`**: This context documentation file.
+
 ### `Correspondencia automatica/`
-Contains the main automation scripts and their outputs.
-*   **`iccs_tabla.py`**: The primary Python script. It performs the following operations:
-    1.  **PDF Extraction:** Reads `ICCS_SPANISH_2016_web.pdf` to extract crime codes (Levels 1-4) and descriptions using `pdfplumber`.
-    2.  **Data Merging:** Loads CSV definitions from `parse_defs/` and merges them with the PDF data.
-    3.  **Validation:** Compares descriptions (`glosa_iccs` vs `delito_iccs`) to ensure accuracy.
-    4.  **Output:** Generates `iccs_parse_final` in CSV, JSON, and Excel formats.
-*   **`parse_defs/`**: Directory containing CSV fragments with parsed definitions (Sections 01-03, 04-08, 09-11) used as inputs for the merge process.
+Contains the main automation scripts for ICCS PDF parsing.
+*   **`iccs_tabla.py`**: The primary Python script for ICCS PDF extraction.
+*   **`parse_defs/`**: Directory containing CSV fragments with parsed definitions.
 *   **Output Files**: `iccs_parse_final.csv`, `.json`, `.xlsx`.
 
-### `Correspondencia manual/`
-Stores manually curated correspondence tables, organized by year.
-*   **`2023/`**: Correspondence files for the 2022-2023 period.
-*   **`2024/`**: Final correspondence versions for 2023-2024.
+### `CNP/`
+Contains historical data and the output of the consolidation process.
+*   **`2021_enero/`** to **`2025_julio/`**: Directories containing source `.docx` files.
+*   **Output Files**: `consolidado_CNP_2025_2021.xlsx`, `consolidado_CNP_2025_2021.parquet`.
+*   **`procesar_consolidado.py`**: Script for processing and consolidating historical CNP (Codificación Nacional Penal) data from Word documents (2021-2025).
+### `Correspondencia manual/` & `ICCS_UNODC/` & `ICSS_PDF/`
+Storage for manual correspondence tables, reference UNODC datasets, and source PDF documentation.
 
-### `ICCS_UNODC/`
-Contains reference datasets provided by UNODC.
-*   `Delitos_Espanol_170221.csv`: Base list of crimes in Spanish.
-*   `Delitos_Ingles_170221.csv`: Base list of crimes in English.
+---
 
-### `ICSS_PDF/`
-Source documentation.
-*   `ICCS_SPANISH_2016_web.pdf`: The primary source document parsed by the script.
-*   Other versions (English, rotated) are also stored here.
+## Detailed Script Analysis
 
-## Key Technologies & Dependencies
+### 1. `Correspondencia automatica/iccs_tabla.py`
 
-The project relies on Python for data processing. Key libraries inferred from imports:
-*   **`pandas`**: For data manipulation and CSV/Excel export.
-*   **`pdfplumber`**: For extracting text and structure from PDF files.
-*   **`unicodedata` & `re`**: For text normalization and pattern matching.
+**Goal:** Extracts hierarchically structured crime data (levels 1-4) directly from the `ICCS_SPANISH_2016_web.pdf` and merges it with detailed definitions stored in auxiliary CSV files.
 
-## Usage & Configuration
+**Key Functions & Logic:**
 
-### Running the Script
-To regenerate the master tables, execute the main script from the `Correspondencia automatica` directory:
+*   **`_load_pdf_lines() -> List[str]`**:
+    *   Uses `pdfplumber` to open the PDF defined in `PDF_PATH`.
+    *   Iterates through a specific page range (`START_PAGE_INDEX` to `END_PAGE_INDEX`) where the summary tables are located.
+    *   Extracts raw text line by line.
 
+*   **`extract_section_data() -> List[Dict]`**:
+    *   **The Core Engine:** Implements a state-machine approach to parse the unstructured text lines.
+    *   **State Tracking:** Keeps track of the `current_section` (e.g., "01"), `current_entry` (incomplete crime record being built), and `pending_lines` (description text spanning multiple lines).
+    *   **Regex Matching:** Uses `SECTION_PATTERN` to identify new sections and `CODE_PATTERN` to identify crime codes (e.g., "0101").
+    *   **Logic:** When a new code or section is found, the previous entry is "finalized" and added to the list. It handles multi-line descriptions by accumulating text until a new structural element is found.
+
+*   **`load_parse_defs_data() -> pd.DataFrame`**:
+    *   Scans the `parse_defs/` directory for CSV files matching `parse_defs_secc_*.csv`.
+    *   Concatenates them into a single Pandas DataFrame containing rich metadata (inclusions, exclusions, notes).
+
+*   **`main()`**:
+    *   Orchestrates the flow: Extracts PDF data -> Loads CSV definitions -> Merges them on `codigo_iccs`.
+    *   **Validation:** Creates a `glosa_match` column to verify if the PDF description matches the CSV description.
+    *   **Export:** Calls `save_outputs()` to save the final clean dataset.
+
+### 2. `procesar_consolidado.py`
+
+**Goal:** specific script to process a set of Word documents (`.docx`) located in `CNP/YYYY_mes` folders. It extracts crime codes, glosses, articles, and descriptions, identifies the "family" (legal title) of the crime, and consolidates the data into a single "master" list, keeping the most recent version of each crime.
+
+**Key Functions & Logic:**
+
+*   **`parse_docx(file_path) -> List[Dict]`**:
+    *   **Native XML Parsing:** Instead of using heavy libraries like `python-docx`, this function uses `zipfile` to open the `.docx` (which is a zip of XMLs) and `xml.etree.ElementTree` to parse `word/document.xml`.
+    *   **Row Iteration:** Iterates through table rows (`<w:tr>`) and cells (`<w:tc>`).
+    *   **Family Extraction:** Checks if the first column contains non-numeric text (e.g., "LEY Nº 20.000..."). If so, sets this as the `current_family` for subsequent rows.
+    *   **Data Extraction:** If column 1 is a number, it's a **Code**. It captures the Code and Glosa. If column 1 is empty but column 2 has content, it treats it as **Article** (if starting with "ART") or **Description**.
+    *   **Safety:** Uses `get_text_from_cell` to handle complex XML text structures.
+
+*   **`get_text_from_cell(tc) -> str`**:
+    *   Extracts text from all `<w:t>` tags within a cell.
+    *   **Crucial Cleanup:** Aggressively removes newlines (`\n`, `\r`) and tabs, replacing them with spaces to ensure the output is flat and clean for tabular formats.
+
+*   **`get_period_score(period_name) -> int`**:
+    *   Converts folder names like "2025_julio" into an integer (e.g., `202507`) to allow mathematical comparison of "freshness".
+
+*   **`main()`**:
+    *   **Discovery:** Loops through all folders in `CNP/`.
+    *   **Ranking Logic:** Uses a dictionary `all_records` keyed by crime code.
+    *   **Update Rule:** If a code exists in `2021_enero` and later in `2025_julio`, the script compares their scores. Since 202507 > 202101, it overwrites the entry with the data from 2025, ensuring only the *latest valid definition* survives.
+    *   **Export:** Saves the consolidated data to **Excel (`.xlsx`)** and **Parquet (`.parquet`)** using Pandas.
+
+## Key Technologies
+
+*   **`pandas`**: The backbone for data manipulation, merging, and exporting to Excel/Parquet.
+*   **`pdfplumber`**: Used in `iccs_tabla.py` for robust text extraction from PDFs.
+*   **`xml.etree.ElementTree`**: Used in `procesar_consolidado.py` for fast, dependency-free parsing of Word document internals.
+*   **`unicodedata`**: Used for normalizing text (removing accents, standardizing characters).
+
+## Usage
+
+### Regenerate ICCS Master Table
 ```bash
-python iccs_tabla.py
+python "Correspondencia automatica/iccs_tabla.py"
 ```
 
-### Configuration Note
-The script `iccs_tabla.py` currently uses **absolute paths** specific to the local environment:
-*   `PDF_PATH`: Points to the PDF in `ICSS_PDF`.
-*   `OUTPUT_DIR`: Points to `Correspondencia automatica`.
-
-**Caution:** When moving this project to a new machine or environment, these paths in `iccs_tabla.py` must be updated to reflect the new directory structure or converted to relative paths.
-
-## Data Schema (`iccs_parse_final`)
-
-The generated master table includes the following key fields:
-*   **`codigo_iccs`**: The unique identifier for the crime.
-*   **`nivel_1` - `nivel_4`**: Hierarchical breakdown of the crime code.
-*   **`delito_iccs`**: Description extracted from the PDF.
-*   **`glosa_iccs`**: Description from the definition CSVs.
-*   **`glosa_match`**: Boolean indicating if the descriptions match.
-*   **`descripcion`**: Detailed description of the crime.
-*   **`inclusiones`**: Specific acts included in this category.
-*   **`exclusiones`**: Acts excluded from this category.
-*   **`notas`**: Additional context or footnotes.
+### Regenerate CNP Consolidated History
+```bash
+python procesar_consolidado.py
+```
+*Output will be saved to `CNP/consolidado_CNP_2025_2021.xlsx` and `.parquet`.*
