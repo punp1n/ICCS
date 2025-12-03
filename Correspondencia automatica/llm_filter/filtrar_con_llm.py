@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -16,13 +17,22 @@ from typing import Any
 import pandas as pd
 from openai import OpenAI
 from tqdm import tqdm
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 # Configuracion
-# IMPORTANTE: Configurar tu API key antes de ejecutar
-# Opción 1: Variable de entorno (recomendado)
-# export OPENAI_API_KEY="tu-api-key-aqui"
-# Opción 2: Reemplazar directamente aquí (NO subir al repositorio con la key real)
-API_KEY = "TU_API_KEY_AQUI"  # Reemplazar con tu API key de OpenAI
+# IMPORTANTE: La API key se lee desde el archivo .env en la raiz del proyecto
+# Si no existe, se intenta leer desde variable de entorno OPENAI_API_KEY
+API_KEY = os.getenv("OPENAI_API_KEY")
+if not API_KEY or API_KEY == "TU_API_KEY_AQUI":
+    raise ValueError(
+        "ERROR: API key no configurada. Por favor:\n"
+        "1. Crea un archivo .env en la raiz del proyecto\n"
+        "2. Agrega la linea: OPENAI_API_KEY=tu-api-key-aqui\n"
+        "O configura la variable de entorno OPENAI_API_KEY"
+    )
 MODEL_NAME = "gpt-5-mini"
 TOP_K = 10  # numero fijo de candidatos a evaluar
 MAX_RETRIES = 3
