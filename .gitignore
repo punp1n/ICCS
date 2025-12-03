@@ -68,6 +68,10 @@ output/
 */outputs/
 */output/
 
+# EXCEPCIÓN: Permitir outputs finales del LLM filter
+!Correspondencia*automatica/llm_filter/outputs/*.csv
+!Correspondencia*automatica/llm_filter/outputs/*.xlsx
+
 # Consolidados CNP (archivos generados)
 CNP/consolidado_*.xlsx
 CNP/consolidado_*.parquet
