@@ -163,11 +163,18 @@ config_secret.py
 *.7z
 
 # ============================================
+# ARCHIVOS LEGACY Y ARCHIVE (NO SUBIR)
+# ============================================
+archive/
+*/archive/
+generar_iccs_tabla.py
+
+# ============================================
 # ARCHIVOS A INCLUIR (VERIFICAR)
 # ============================================
 # ✅ Se subirán automáticamente:
-# - *.py (scripts)
+# - *.py (scripts activos, no legacy)
 # - *.md (documentación)
-# - requirements.txt
+# - *.txt (requirements, instrucciones)
 # - .gitignore
 # - parse_defs/*.csv (configuración ICCS)
