@@ -1,0 +1,58 @@
+================================================================
+INSTRUCCIONES PARA EJECUTAR DESDE CMD (Windows)
+================================================================
+
+1. Abrir CMD (símbolo del sistema)
+
+2. Navegar a esta carpeta:
+   cd "C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\embeddings"
+
+3. Activar el entorno virtual:
+   .venv\Scripts\activate.bat
+
+4. Ejecutar el script (opción básica):
+   python preparar_embeddings.py
+
+   O con opciones personalizadas:
+   python preparar_embeddings.py --k 10 --batch-size 16
+
+================================================================
+OPCIONES DISPONIBLES:
+================================================================
+
+--k 10                  Número de vecinos más cercanos (default: 10)
+--batch-size 16         Tamaño de lote (default: 16, reducir si falta VRAM)
+--device cuda           Forzar GPU (default: auto-detecta)
+--device cpu            Forzar CPU
+--skip-embeddings       Solo preparar textos sin generar embeddings
+
+================================================================
+EJEMPLOS:
+================================================================
+
+# Ejecución estándar (GPU automática, k=10)
+python preparar_embeddings.py
+
+# Obtener 20 candidatos en lugar de 10
+python preparar_embeddings.py --k 20
+
+# Reducir batch si se queda sin memoria GPU
+python preparar_embeddings.py --batch-size 8
+
+# Forzar uso de CPU
+python preparar_embeddings.py --device cpu
+
+================================================================
+ARCHIVOS GENERADOS (en carpeta artifacts/):
+================================================================
+
+1. matches_compacto.csv    - Una fila por código CNP (revisar primero)
+2. matches_detallado.csv   - Todos los matches expandidos
+3. matches_reporte.txt     - Reporte de texto de primeros 20 códigos
+4. cnp_preparado.csv       - Textos CNP preprocesados
+5. iccs_preparado.csv      - Textos ICCS preprocesados
+6. cnp_embeddings.parquet  - Embeddings CNP
+7. iccs_embeddings.parquet - Embeddings ICCS
+8. metadata_embeddings.json - Información de ejecución
+
+================================================================
