@@ -42,7 +42,7 @@ RETRY_DELAY = 2  # segundos
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MATCHES_DETALLADO_PATH = REPO_ROOT / "Correspondencia automatica" / "embeddings" / "artifacts" / "matches_detallado.csv"
 ICCS_DESCRIPCION_PATH = REPO_ROOT / "Correspondencia automatica" / "outputs" / "iccs_descripcion.csv"
-CORRESP_MANUAL_PATH = REPO_ROOT / "Correspondencia manual" / "2024" / "07102025_TC_Final_2023-2024_v1.2.xlsx"
+CORRESP_MANUAL_PATH = REPO_ROOT / "Correspondencia manual" / "2024" / "28072025_TC_Final_2023-2024_version completa.xlsx"
 OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 
 
@@ -65,19 +65,28 @@ def cargar_datos() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def normalizar_codigo_iccs(codigo: Any) -> str:
-    """Normaliza codigos ICCS eliminando ceros a la izquierda y espacios."""
+    """Normaliza codigos ICCS: elimina espacios y convierte a string."""
     if codigo is None:
         return ""
     codigo_str = str(codigo).strip()
-    if not codigo_str:
-        return ""
-    codigo_norm = codigo_str.lstrip("0")
-    return codigo_norm if codigo_norm else "0"
+    return codigo_str
+
+
+def extraer_codigos_iccs_de_texto(texto: str) -> set[str]:
+    """Extrae codigos ICCS mencionados en un texto (exclusiones/inclusiones/notas)."""
+    import re
+    if not texto or pd.isna(texto):
+        return set()
+    # Busca patrones como: "codigo 0501", "(0501)", "clasificar como 0501", etc.
+    # Los codigos ICCS son numericos, pueden tener 3-5 digitos
+    patron = r'\b\d{3,5}\b'
+    codigos_encontrados = re.findall(patron, str(texto))
+    return set(codigos_encontrados)
 
 
 def build_iccs_glosa_map(iccs_full_df: pd.DataFrame) -> dict[str, str]:
     """Construye un dict codigo->glosa desde iccs_descripcion."""
-    codigo_series = iccs_full_df["codigo_iccs"].astype(str).str.strip().str.lstrip("0")
+    codigo_series = iccs_full_df["codigo_iccs"].astype(str).str.strip()
     if "glosa_iccs" in iccs_full_df.columns:
         glosa_series = iccs_full_df["glosa_iccs"].astype(str)
     elif "iccs_glosa" in iccs_full_df.columns:
@@ -183,17 +192,39 @@ INSTRUCCIONES CRITICAS:
 3. Considera ESPECIALMENTE las EXCLUSIONES y NOTAS de cada candidato.
 4. Si una exclusion descarta el delito CNP, ese candidato NO es valido.
 5. Las NOTAS dan contexto sobre cuando aplicar cada codigo.
-6. DELITOS MAS GRAVOSOS: Si dos codigos se excluyen mutuamente (ej: robo vs hurto), elige el delito MAS GRAVOSO. Por ejemplo: robo es mas gravoso que hurto, homicidio es mas gravoso que lesiones, violacion es mas gravosa que abuso sexual.
+
+6. CRITERIO DE CLASIFICACION - MOVIL DEL DELITO:
+   El criterio principal es el MOVIL O JUSTIFICACION ORIGINAL del delito, independiente de sus consecuencias.
+
+   EJEMPLOS DE CLASIFICACION CORRECTA:
+   - "Robo con homicidio" -> Clasifica como ROBO (delito contra propiedad). El movil es apropiarse de bienes; la muerte es fortuita.
+   - "Robo con violacion" -> Clasifica como ROBO si el movil inicial era robar y la violacion fue oportunista. Si el movil inicial era sexual y el robo secundario, clasifica como violacion.
+   - "Secuestro extorsivo" -> Clasifica como SECUESTRO. El movil es privar de libertad; la extorsion es el objetivo del secuestro.
+   - "Violacion con homicidio para eliminar testigo" -> Clasifica como VIOLACION. El movil original era sexual; matar al testigo es posterior.
+   - "Homicidio para robar" -> Clasifica como HOMICIDIO si matar era necesario para robar (no fortuito).
+
+   REGLA: Preguntate "¿Cual era la intencion INICIAL del delincuente antes de actuar?" Esa es la clasificacion correcta.
+
 7. DELITOS SIN DESCRIPCION: Si el delito CNP no tiene descripcion o dice "sin descripcion":
    a) Intenta clasificar usando la GLOSA y FAMILIA aunque sea en terminos genericos.
    b) Solo devuelve "NINGUNO" si el delito es completamente generico (ej: "otros delitos") y no hay contexto suficiente para clasificar.
+
 8. Si NINGUN candidato es apropiado tras aplicar todas las reglas anteriores, devuelve "NINGUNO" y explica por que.
-9. No inventes informacion que no este en los insumos. Tu analisis legal es prioritario sobre el score de similitud.
-10. Si alguna exclusion o inclusion menciona un codigo ICCS que describe mejor el delito CNP, elige ese codigo aunque no aparezca en la lista. Elimina ceros iniciales antes de reportarlo (ej: 0509 -> 509).
+
+9. RESTRICCION DE CODIGOS - PROHIBIDO INVENTAR:
+   - DEBES elegir uno de los {len(cnp_data['candidatos'])} codigos ICCS listados arriba como candidatos.
+   - EXCEPCION: Si en las EXCLUSIONES o INCLUSIONES de algun candidato se menciona explicitamente otro codigo ICCS que describe mejor el delito CNP, puedes elegir ese codigo aunque NO este en la lista de candidatos.
+   - Si eliges un codigo que no esta en los candidatos, DEBES justificar en que exclusion/inclusion aparece mencionado.
+   - NO puedes inventar codigos arbitrarios. Si no hay candidato apropiado ni codigo mencionado en exclusiones/inclusiones, devuelve "NINGUNO".
+
+10. Tu analisis legal y criminologico es prioritario sobre el score de similitud de embeddings.
+
+CODIGOS ICCS VALIDOS PARA ESTE DELITO CNP (elige UNO de estos o "NINGUNO"):
+{', '.join([cand['iccs_codigo'] for cand in cnp_data['candidatos']])}
 
 RESPONDE UNICAMENTE CON UN OBJETO JSON (sin markdown ni explicaciones adicionales):
 {{
-  "iccs_elegido": "codigo ICCS elegido o NINGUNO",
+  "iccs_elegido": "codigo ICCS elegido (debe ser uno de la lista de arriba) o NINGUNO",
   "confianza": "alta|media|baja",
   "justificacion": "Explicacion breve de por que elegiste este codigo, menciona si aplicaste alguna exclusion",
   "exclusiones_aplicadas": ["lista de exclusiones que descartaron otros candidatos, vacio si no aplica"]
@@ -215,7 +246,9 @@ def llamar_llm(client: OpenAI, prompt: str, cnp_codigo: str) -> dict[str, Any] |
                         "content": (
                             "Eres un experto en clasificacion de delitos penales. "
                             "Respondes solo en JSON valido. No inventes datos fuera de los insumos. "
-                            "Cuando hay exclusion mutua, prefiere el delito mas gravoso. "
+                            "Clasifica segun el MOVIL del delito, no la consecuencia mas grave. "
+                            "Elige de los 10 candidatos presentados o de codigos mencionados en exclusiones/inclusiones. "
+                            "NUNCA inventes codigos arbitrarios. "
                             "Para delitos sin descripcion, clasifica con glosa y familia. "
                             "Solo responde NINGUNO si el delito es completamente generico sin contexto suficiente."
                         ),
@@ -293,13 +326,42 @@ def procesar_batch(
 
         iccs_elegido = respuesta_llm["iccs_elegido"]
         iccs_glosa_elegida = ""
+
+        # VALIDACION: Verificar que el codigo elegido este en los candidatos o sea NINGUNO
         if iccs_elegido != "NINGUNO":
+            iccs_elegido_norm = normalizar_codigo_iccs(iccs_elegido)
+            codigos_validos = [normalizar_codigo_iccs(cand["iccs_codigo"]) for cand in cnp_data["candidatos"]]
+
+            # Extraer codigos mencionados en exclusiones/inclusiones/notas de todos los candidatos
+            codigos_mencionados = set()
             for cand in cnp_data["candidatos"]:
-                if cand["iccs_codigo"] == iccs_elegido:
+                codigos_mencionados.update(extraer_codigos_iccs_de_texto(cand.get("iccs_exclusiones", "")))
+                codigos_mencionados.update(extraer_codigos_iccs_de_texto(cand.get("iccs_inclusiones", "")))
+                codigos_mencionados.update(extraer_codigos_iccs_de_texto(cand.get("iccs_notas", "")))
+
+            # Verificar si el codigo esta en candidatos o en codigos mencionados
+            if iccs_elegido_norm not in codigos_validos and iccs_elegido_norm not in codigos_mencionados:
+                print(f"  ALERTA: CNP {cnp_codigo} - LLM alucino codigo '{iccs_elegido}' que NO esta en candidatos ni mencionado")
+                print(f"         Candidatos validos: {codigos_validos}")
+                print(f"         Codigos mencionados en exclusiones/inclusiones: {codigos_mencionados}")
+                errores.append({
+                    "cnp_codigo": cnp_codigo,
+                    "error": f"Codigo alucinado: {iccs_elegido}",
+                    "candidatos_validos": codigos_validos,
+                    "codigos_mencionados": list(codigos_mencionados),
+                    "justificacion_llm": respuesta_llm.get("justificacion", "")
+                })
+                continue
+
+            # Buscar la glosa del codigo elegido
+            for cand in cnp_data["candidatos"]:
+                if normalizar_codigo_iccs(cand["iccs_codigo"]) == iccs_elegido_norm:
                     iccs_glosa_elegida = cand["iccs_glosa"]
                     break
+
+            # Si no se encontro en candidatos, buscar en el mapa general de ICCS
             if not iccs_glosa_elegida:
-                iccs_glosa_elegida = iccs_glosa_map.get(normalizar_codigo_iccs(iccs_elegido), "")
+                iccs_glosa_elegida = iccs_glosa_map.get(iccs_elegido_norm, "")
 
         top_refs: dict[str, Any] = {}
         for idx in range(TOP_K):
@@ -329,14 +391,39 @@ def procesar_batch(
                 json.dump({"procesados": list(procesados), "resultados": resultados}, f, indent=2, ensure_ascii=False)
 
     if errores:
-        print(f"\nError: {len(errores)} codigos con errores:")
-        for error in errores[:5]:
-            print(f"  - CNP {error['cnp_codigo']}: {error['error']}")
+        print(f"\n{'=' * 60}")
+        print(f"ERRORES Y ALUCINACIONES: {len(errores)} casos detectados")
+        print(f"{'=' * 60}")
+
+        alucinaciones = [e for e in errores if "alucinado" in e.get("error", "").lower()]
+        otros_errores = [e for e in errores if "alucinado" not in e.get("error", "").lower()]
+
+        if alucinaciones:
+            print(f"\n  ALUCINACIONES DE CODIGOS: {len(alucinaciones)}")
+            for error in alucinaciones[:5]:
+                print(f"    - CNP {error['cnp_codigo']}: {error['error']}")
+            if len(alucinaciones) > 5:
+                print(f"    ... y {len(alucinaciones) - 5} mas")
+
+        if otros_errores:
+            print(f"\n  OTROS ERRORES: {len(otros_errores)}")
+            for error in otros_errores[:5]:
+                print(f"    - CNP {error['cnp_codigo']}: {error['error']}")
+            if len(otros_errores) > 5:
+                print(f"    ... y {len(otros_errores) - 5} mas")
 
         error_file = OUTPUT_DIR / "errores.log"
         with open(error_file, "w", encoding="utf-8") as f:
             json.dump(errores, f, indent=2, ensure_ascii=False)
-        print(f"  Log completo en: {error_file}")
+
+        if alucinaciones:
+            alucinaciones_file = OUTPUT_DIR / "alucinaciones_detectadas.json"
+            with open(alucinaciones_file, "w", encoding="utf-8") as f:
+                json.dump(alucinaciones, f, indent=2, ensure_ascii=False)
+            print(f"\n  Log de alucinaciones: {alucinaciones_file}")
+
+        print(f"  Log completo de errores: {error_file}")
+        print(f"{'=' * 60}")
 
     return resultados
 
