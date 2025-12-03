@@ -169,15 +169,6 @@ pip install -r requirements.txt
 deactivate
 ```
 
-### 3. Configurar API Key de OpenAI
-
-En el archivo `Correspondencia automatica/llm_filter/filtrar_con_llm.py`, línea 21, reemplazar con tu API key:
-
-```python
-API_KEY = "tu-api-key-aqui"
-```
-
-**⚠️ IMPORTANTE**: Nunca subir la API key al repositorio. Considerar usar variables de entorno en producción.
 
 ---
 
@@ -809,9 +800,9 @@ cnp_weights = {
 
 ### Documentación Oficial
 
-1. **ICCS (ONU)**: [https://www.unodc.org/unodc/en/data-and-analysis/statistics/iccs.html](https://www.unodc.org/unodc/en/data-and-analysis/iccs.html)
+1. **ICCS (ONU)**: [https://www.unodc.org/unodc/en/data-and-analysis/statistics/iccs.html](https://www.unodc.org/unodc/en/data-and-analysis/statistics/iccs.html)
 2. **Modelo E5**: Wang et al. (2022) - "Text Embeddings by Weakly-Supervised Contrastive Pre-training"
-3. **GPT-4o-mini**: [https://platform.openai.com/docs/models/gpt-4o-mini](https://platform.openai.com/docs/models/gpt-4o-mini)
+3. **GPT-4o-mini**: [https://platform.openai.com/docs/models/gpt-5-mini](https://platform.openai.com/docs/models/gpt-5-mini)
 
 ### Modelos y Librerías
 
