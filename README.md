@@ -8,7 +8,7 @@
 
 Este proyecto implementa un pipeline automatizado para clasificar delitos del Código Penal Nacional (CNP) de Chile según la Clasificación Internacional de Delitos con Fines Estadísticos (ICCS) de las Naciones Unidas. El sistema combina técnicas de procesamiento de lenguaje natural (NLP), búsqueda vectorial mediante embeddings y razonamiento legal asistido por modelos de lenguaje de gran escala (LLM).
 
-**Motivación**: Tradicionalmente, la correspondencia entre CNP e ICCS se realizaba de forma manual por expertos legales, proceso que requería semanas de trabajo. Este sistema reduce el tiempo de clasificación a minutos, manteniendo alta precisión mediante validación experta.
+**Motivación**: Tradicionalmente, la correspondencia entre CNP e ICCS se realizaba de forma manual por analistas INE con asesorías UNODC y la Corporación Administrativa del Poder Judicial (CAPJ), proceso que requería semanas de trabajo. Este sistema reduce el tiempo de clasificación a minutos, manteniendo alta precisión mediante validación experta.
 
 **Resultados**: El sistema procesa ~600 códigos CNP y los clasea contra ~300 códigos ICCS, generando correspondencias de alta confianza validadas contra etiquetas manuales existentes.
 
@@ -821,7 +821,7 @@ cnp_weights = {
 
 ### Contacto
 
-**Equipo**: Data Science - Instituto Nacional de Estadísticas (INE), Chile
+**Equipo**: Sección Seguridad Pública y Justicia - Instituto Nacional de Estadísticas (INE), Chile
 **Proyecto**: Clasificación Automatizada de Delitos CNP-ICCS
 **Fecha**: Diciembre 2025
 

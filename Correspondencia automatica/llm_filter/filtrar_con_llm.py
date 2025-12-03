@@ -23,7 +23,7 @@ from tqdm import tqdm
 # export OPENAI_API_KEY="tu-api-key-aqui"
 # Opción 2: Reemplazar directamente aquí (NO subir al repositorio con la key real)
 API_KEY = "TU_API_KEY_AQUI"  # Reemplazar con tu API key de OpenAI
-MODEL_NAME = "gpt-5-mini"
+MODEL_NAME = "gpt-4o-mini"
 TOP_K = 10  # numero fijo de candidatos a evaluar
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # segundos

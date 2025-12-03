@@ -56,6 +56,7 @@ desktop.ini
 # EXCEPCIONES IMPORTANTES: Archivos CSV de configuración que SÍ se deben subir
 !parse_defs/*.csv
 !Correspondencia*automatica/parse_defs/*.csv
+!Correspondencia*automatica/outputs/iccs_parse_final.csv
 
 # ============================================
 # OUTPUTS Y ARTIFACTS (NO SUBIR)
@@ -70,6 +71,9 @@ output/
 # Consolidados CNP (archivos generados)
 CNP/consolidado_*.xlsx
 CNP/consolidado_*.parquet
+
+# EXCEPCIÓN: Permitir consolidado principal para distribución
+!CNP/consolidado_CNP_2025_2021.parquet
 
 # ============================================
 # DATOS CRUDOS FUENTE (NO SUBIR - MUY PESADOS)
@@ -163,11 +167,16 @@ config_secret.py
 *.7z
 
 # ============================================
-# ARCHIVOS LEGACY Y ARCHIVE (NO SUBIR)
+# CARPETAS EXCLUIDAS (NO SUBIR)
 # ============================================
+# Archivos legacy y archive
 archive/
 */archive/
 generar_iccs_tabla.py
+
+# Carpetas de referencia (no necesarias en repo)
+ICCS_UNODC/
+Correspondencia*manual/
 
 # ============================================
 # ARCHIVOS A INCLUIR (VERIFICAR)
