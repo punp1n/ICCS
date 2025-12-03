@@ -7,7 +7,7 @@ import pandas as pd
 from unicodedata import normalize as uni_normalize, combining
 
 BASE_DIR = Path(
-    r"C:\Users\asvm2\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\CNP"
+    r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\CNP"
 )
 OUTPUT_XLSX = BASE_DIR / "consolidado_CNP_2025_2021.xlsx"
 OUTPUT_PARQUET = BASE_DIR / "consolidado_CNP_2025_2021.parquet"
@@ -16,7 +16,7 @@ MANUAL_XLSX = (
     BASE_DIR.parent
     / "Correspondencia manual"
     / "2024"
-    / "07102025_TC_Final_2023-2024_v1.2.xlsx"
+    / "28072025_TC_Final_2023-2024_version completa.xlsx"
 )
 MANUAL_SHEET = "TC_2024"
 MANUAL_SKIPROWS = 1
@@ -128,43 +128,26 @@ def split_leading_legal_refs(text):
 
 def split_glosa_content(raw_text):
     """
-    Asegura que la glosa contenga solo el titulo.
-    Mueve articulos o leyes embebidos al listado de articulos y deja el resto como descripcion.
+    Retorna la glosa completa sin procesar referencias legales.
     """
     if not raw_text:
         return "", [], []
 
     text = normalize_whitespace(raw_text)
-    match = LEGAL_REF_PATTERN.search(text)
 
-    if match:
-        glosa_text = text[: match.start()].strip(" .;:-")
-        tail = text[match.start():]
-    else:
-        glosa_text = text
-        tail = ""
-
-    refs, remainder = split_leading_legal_refs(tail)
-    descriptions = [remainder.strip()] if remainder else []
-
-    if not glosa_text:
-        glosa_text = text
-
-    return glosa_text, refs, descriptions
+    # Devolver la glosa completa sin intentar extraer referencias legales
+    return text, [], []
 
 
 def parse_article_description(text):
-    """Separa una linea de detalle en referencias legales iniciales y descripcion limpia."""
+    """Retorna la descripción completa sin procesar referencias legales."""
     if not text:
         return [], ""
 
     cleaned = normalize_whitespace(text)
     cleaned = re.sub(r"^[\s\.;:-]+", "", cleaned)
-    refs, remainder = split_leading_legal_refs(cleaned)
 
-    if refs:
-        return refs, remainder
-
+    # Devolver la descripción completa sin intentar extraer referencias legales
     return [], cleaned.strip()
 
 
@@ -349,33 +332,15 @@ def main():
             data = entry["data"]
             period = entry["period"]
 
-            raw_articles = list(data["articles"])
+            # Unir todas las descripciones sin procesar referencias legales
             valid_descs = [d for d in data["descriptions"] if d]
-
-            cleaned_descs = []
-            for desc in valid_descs:
-                refs_from_desc, remainder_desc = split_leading_legal_refs(desc)
-                raw_articles.extend(refs_from_desc)
-                if remainder_desc:
-                    cleaned_descs.append(remainder_desc.strip())
-
-            unique_arts = []
-            seen = set()
-            for art in raw_articles:
-                cleaned_art = art.strip()
-                if cleaned_art and cleaned_art not in seen:
-                    unique_arts.append(cleaned_art)
-                    seen.add(cleaned_art)
-
-            articles_str = " ; ".join(unique_arts)
-            desc_str = " ".join(cleaned_descs).strip()
+            desc_str = " ".join(valid_descs).strip()
 
             final_rows.append(
                 {
                     "codigo": data["codigo"],
                     "familia_nombre": data["familia_nombre"],
                     "glosa": data["glosa"].strip(" .;:-"),
-                    "articulado": articles_str,
                     "descripcion": desc_str,
                     "ultimo_vigente": period,
                 }
@@ -401,7 +366,6 @@ def main():
                         "codigo": cum_value,
                         "familia_nombre": "",
                         "glosa": glosa_manual,
-                        "articulado": "",
                         "descripcion": desc_manual,
                         "ultimo_vigente": MANUAL_FLAG_VALUE,
                     }

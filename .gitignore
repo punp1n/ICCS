@@ -37,6 +37,15 @@ desktop.ini
 .claude/
 
 # ============================================
+# ARCHIVOS DE CONFLICTO ONEDRIVE
+# ============================================
+*-BULP04N009*
+*-*.gitignore
+*-*.py
+*-*.txt
+*-*.md
+
+# ============================================
 # DATOS GENERADOS (NO SUBIR)
 # ============================================
 
@@ -67,10 +76,6 @@ output/
 */artifacts/
 */outputs/
 */output/
-
-# EXCEPCIÓN: Permitir outputs finales del LLM filter
-!Correspondencia*automatica/llm_filter/outputs/*.csv
-!Correspondencia*automatica/llm_filter/outputs/*.xlsx
 
 # Consolidados CNP (archivos generados)
 CNP/consolidado_*.xlsx
