@@ -1,0 +1,173 @@
+# ============================================
+# GITIGNORE - Proyecto Clasificación CNP-ICCS
+# ============================================
+# Solo se suben: scripts .py, .md, requirements.txt, parse_defs/*.csv
+# Se excluyen: datos generados, entornos virtuales, archivos pesados
+
+# ============================================
+# PYTHON
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# ============================================
+# ENTORNOS VIRTUALES
+# ============================================
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# ============================================
+# IDEs Y EDITORES
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+.claude/
+
+# ============================================
+# DATOS GENERADOS (NO SUBIR)
+# ============================================
+
+# Archivos Excel/Parquet generados
+*.xlsx
+*.xls
+*.parquet
+*.feather
+
+# EXCEPCIÓN: Permitir archivos de correspondencia manual específicos si son necesarios
+# Descomenta la siguiente línea si necesitas subir la correspondencia manual de referencia:
+# !"Correspondencia manual/2024/07102025_TC_Final_2023-2024_v1.2.xlsx"
+
+# Archivos CSV generados (outputs, artifacts)
+*.csv
+
+# EXCEPCIONES IMPORTANTES: Archivos CSV de configuración que SÍ se deben subir
+!parse_defs/*.csv
+!Correspondencia*automatica/parse_defs/*.csv
+
+# ============================================
+# OUTPUTS Y ARTIFACTS (NO SUBIR)
+# ============================================
+artifacts/
+outputs/
+output/
+*/artifacts/
+*/outputs/
+*/output/
+
+# Consolidados CNP (archivos generados)
+CNP/consolidado_*.xlsx
+CNP/consolidado_*.parquet
+
+# ============================================
+# DATOS CRUDOS FUENTE (NO SUBIR - MUY PESADOS)
+# ============================================
+
+# Archivos DOCX de CNP por periodo
+CNP/2025_julio/*.docx
+CNP/2025_julio/*.DOCX
+CNP/2025_julio/*.xlsx
+CNP/2025_enero/*.docx
+CNP/2025_enero/*.DOCX
+CNP/2025_enero/*.xlsx
+CNP/2024_julio/*.docx
+CNP/2024_julio/*.DOCX
+CNP/2024_julio/*.xlsx
+CNP/2024_enero/*.docx
+CNP/2024_enero/*.DOCX
+CNP/2024_enero/*.xlsx
+CNP/2023_julio/*.docx
+CNP/2023_julio/*.DOCX
+CNP/2023_julio/*.xlsx
+CNP/2023_enero/*.docx
+CNP/2023_enero/*.DOCX
+CNP/2023_enero/*.xlsx
+CNP/2022_julio/*.docx
+CNP/2022_julio/*.DOCX
+CNP/2022_julio/*.xlsx
+CNP/2022_enero/*.docx
+CNP/2022_enero/*.DOCX
+CNP/2022_enero/*.xlsx
+CNP/2021_julio/*.docx
+CNP/2021_julio/*.DOCX
+CNP/2021_julio/*.xlsx
+CNP/2021_enero/*.docx
+CNP/2021_enero/*.DOCX
+CNP/2021_enero/*.xlsx
+
+# PDFs de referencia (muy pesados)
+*.pdf
+
+# EXCEPCIÓN: Si necesitas subir el PDF ICCS (85MB aprox), descomenta:
+# !ICSS_PDF/ICCS_SPANISH_2016_web.pdf
+
+# ============================================
+# CHECKPOINTS Y TEMPORALES
+# ============================================
+checkpoint.json
+*.tmp
+*.temp
+*.log
+errores.log
+
+# ============================================
+# MODELOS Y EMBEDDINGS (MUY PESADOS)
+# ============================================
+*.bin
+*.pt
+*.pth
+*.h5
+*.pkl
+*.pickle
+embeddings_cache/
+models/
+.cache/
+
+# ============================================
+# NOTEBOOKS JUPYTER
+# ============================================
+.ipynb_checkpoints/
+*.ipynb
+
+# ============================================
+# SECRETOS Y API KEYS (NUNCA SUBIR)
+# ============================================
+.env
+.env.local
+*.key
+*_secret.json
+credentials.json
+config_secret.py
+
+# ============================================
+# BACKUPS Y COMPRIMIDOS
+# ============================================
+*.bak
+*.backup
+*~
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ============================================
+# ARCHIVOS A INCLUIR (VERIFICAR)
+# ============================================
+# ✅ Se subirán automáticamente:
+# - *.py (scripts)
+# - *.md (documentación)
+# - requirements.txt
+# - .gitignore
+# - parse_defs/*.csv (configuración ICCS)
