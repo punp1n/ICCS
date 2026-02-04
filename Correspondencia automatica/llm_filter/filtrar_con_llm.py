@@ -25,14 +25,6 @@ load_dotenv()
 # Configuracion
 # IMPORTANTE: La API key se lee desde el archivo .env en la raiz del proyecto
 # Si no existe, se intenta leer desde variable de entorno OPENAI_API_KEY
-API_KEY = os.getenv("OPENAI_API_KEY")
-if not API_KEY or API_KEY == "TU_API_KEY_AQUI":
-    raise ValueError(
-        "ERROR: API key no configurada. Por favor:\n"
-        "1. Crea un archivo .env en la raiz del proyecto\n"
-        "2. Agrega la linea: OPENAI_API_KEY=tu-api-key-aqui\n"
-        "O configura la variable de entorno OPENAI_API_KEY"
-    )
 MODEL_NAME = "gpt-5-mini"
 TOP_K = 10  # numero fijo de candidatos a evaluar
 MAX_RETRIES = 3
@@ -44,6 +36,24 @@ MATCHES_DETALLADO_PATH = REPO_ROOT / "Correspondencia automatica" / "embeddings"
 ICCS_DESCRIPCION_PATH = REPO_ROOT / "Correspondencia automatica" / "outputs" / "iccs_descripcion.csv"
 CORRESP_MANUAL_PATH = REPO_ROOT / "Correspondencia manual" / "2024" / "28072025_TC_Final_2023-2024_version completa.xlsx"
 OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
+
+
+def get_api_key() -> str:
+    """Obtiene la API key desde .env o variable de entorno."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or api_key == "TU_API_KEY_AQUI":
+        raise ValueError(
+            "ERROR: API key no configurada. Por favor:\n"
+            "1. Crea un archivo .env en la raiz del proyecto\n"
+            "2. Agrega la linea: OPENAI_API_KEY=tu-api-key-aqui\n"
+            "O configura la variable de entorno OPENAI_API_KEY"
+        )
+    return api_key
+
+
+def get_openai_client() -> OpenAI:
+    """Crea el cliente OpenAI solo cuando se necesita."""
+    return OpenAI(api_key=get_api_key())
 
 
 def cargar_datos() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -64,12 +74,73 @@ def cargar_datos() -> tuple[pd.DataFrame, pd.DataFrame]:
     return matches, iccs_full
 
 
+def cargar_iccs_descripcion() -> pd.DataFrame:
+    """Carga solo ICCS descripcion (para modo comparar)."""
+    print("Cargando ICCS descripcion...")
+    if not ICCS_DESCRIPCION_PATH.exists():
+        raise FileNotFoundError(f"No se encuentra: {ICCS_DESCRIPCION_PATH}")
+    iccs_full = pd.read_csv(ICCS_DESCRIPCION_PATH, encoding="utf-8-sig")
+    print(f"  - ICCS descripcion: {len(iccs_full)} codigos")
+    return iccs_full
+
+
+def cargar_salida_llm(path: Path) -> pd.DataFrame:
+    """Carga la salida LLM desde CSV/XLSX y reporta el archivo usado."""
+    if not path.exists():
+        raise FileNotFoundError(f"No se encuentra salida LLM: {path}")
+
+    print(f"Usando salida LLM: {path}")
+    if path.suffix.lower() in {'.xlsx', '.xls'}:
+        df = pd.read_excel(path)
+    else:
+        df = pd.read_csv(path, encoding="utf-8-sig")
+    print(f"  - Salida LLM cargada: {len(df)} filas")
+    return df
+
+
+def seleccionar_modo() -> str:
+    """Panel de opciones interactivo."""
+    print("\nPANEL DE OPCIONES")
+    print("1. Ejecutar LLM + comparar (genera salidas)")
+    print("2. Solo comparar (usa salida LLM existente)")
+    print("3. Salir")
+    while True:
+        opcion = input("Selecciona una opcion [1-3]: ").strip()
+        if opcion == "1":
+            return "llm"
+        if opcion == "2":
+            return "comparar"
+        if opcion == "3":
+            return "salir"
+        print("Opcion invalida. Intenta nuevamente.")
+
+
 def normalizar_codigo_iccs(codigo: Any) -> str:
     """Normaliza codigos ICCS: elimina espacios y convierte a string."""
     if codigo is None:
         return ""
     codigo_str = str(codigo).strip()
     return codigo_str
+
+
+def codigo_a_int(valor: Any) -> int | None:
+    """Convierte un codigo a int; devuelve None si no es valido."""
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return None
+    if isinstance(valor, (int,)) and not isinstance(valor, bool):
+        return int(valor)
+    valor_str = str(valor).strip()
+    if not valor_str or valor_str.upper() == "NINGUNO":
+        return None
+    try:
+        return int(float(valor_str))
+    except ValueError:
+        return None
+
+
+def serie_a_int(serie: pd.Series) -> pd.Series:
+    """Convierte una serie a Int64 (nullable)."""
+    return pd.to_numeric(serie, errors="coerce").astype("Int64")
 
 
 def extraer_codigos_iccs_de_texto(texto: str) -> set[str]:
@@ -84,7 +155,7 @@ def extraer_codigos_iccs_de_texto(texto: str) -> set[str]:
     return set(codigos_encontrados)
 
 
-def build_iccs_glosa_map(iccs_full_df: pd.DataFrame) -> dict[str, str]:
+def build_iccs_glosa_map(iccs_full_df: pd.DataFrame) -> dict[Any, str]:
     """Construye un dict codigo->glosa desde iccs_descripcion."""
     codigo_series = iccs_full_df["codigo_iccs"].astype(str).str.strip()
     if "glosa_iccs" in iccs_full_df.columns:
@@ -93,7 +164,35 @@ def build_iccs_glosa_map(iccs_full_df: pd.DataFrame) -> dict[str, str]:
         glosa_series = iccs_full_df["iccs_glosa"].astype(str)
     else:
         glosa_series = pd.Series([""] * len(iccs_full_df))
-    return dict(zip(codigo_series, glosa_series))
+    mapa: dict[Any, str] = {}
+    for codigo, glosa in zip(codigo_series, glosa_series):
+        codigo_str = str(codigo).strip()
+        mapa[codigo_str] = glosa
+        codigo_int = codigo_a_int(codigo_str)
+        if codigo_int is not None:
+            mapa[codigo_int] = glosa
+    return mapa
+
+
+def completar_glosas_topk(
+    df: pd.DataFrame,
+    iccs_glosa_map: dict[str, str],
+    top_k: int = TOP_K,
+) -> pd.DataFrame:
+    """Completa columnas topX_glosa a partir de topX_codigo si faltan o estan vacias."""
+    df = df.copy()
+    for idx in range(1, top_k + 1):
+        codigo_col = f"top{idx}_codigo"
+        glosa_col = f"top{idx}_glosa"
+        if codigo_col not in df.columns:
+            continue
+        if glosa_col not in df.columns:
+            df[glosa_col] = ""
+        glosas_actuales = df[glosa_col].fillna("").astype(str)
+        faltan = glosas_actuales.str.strip() == ""
+        codigos = df[codigo_col]
+        df.loc[faltan, glosa_col] = codigos.map(iccs_glosa_map).fillna("")
+    return df
 
 
 def preparar_candidatos(matches_df: pd.DataFrame, iccs_full_df: pd.DataFrame, top_k: int = TOP_K) -> dict[str, list[dict]]:
@@ -366,8 +465,10 @@ def procesar_batch(
         top_refs: dict[str, Any] = {}
         for idx in range(TOP_K):
             codigo = cnp_data["candidatos"][idx]["iccs_codigo"] if idx < len(cnp_data["candidatos"]) else ""
+            glosa = cnp_data["candidatos"][idx]["iccs_glosa"] if idx < len(cnp_data["candidatos"]) else ""
             score = cnp_data["candidatos"][idx]["similarity_score"] if idx < len(cnp_data["candidatos"]) else ""
             top_refs[f"top{idx + 1}_codigo"] = codigo
+            top_refs[f"top{idx + 1}_glosa"] = glosa
             top_refs[f"top{idx + 1}_score"] = score
 
         resultado = {
@@ -375,6 +476,7 @@ def procesar_batch(
             "cnp_glosa": cnp_data["cnp_glosa"],
             "cnp_descripcion": cnp_data["cnp_descripcion"],
             "cnp_familia": cnp_data["cnp_familia"],
+            "cnp_articulado": cnp_data.get("cnp_articulado", ""),
             "iccs_elegido": iccs_elegido,
             "iccs_glosa_elegida": iccs_glosa_elegida,
             "confianza": respuesta_llm["confianza"],
@@ -471,15 +573,98 @@ def guardar_resultados(resultados: list[dict], output_dir: Path) -> pd.DataFrame
 MANUAL_COLS = ["N4-2024 UNODC", "N3-2024 UNODC", "N2-2024 UNODC", "N1-2024 FINAL"]
 
 
-def _extraer_manual_codigos(row: pd.Series) -> list[str]:
+def _extraer_manual_codigos(row: pd.Series) -> list[int]:
     """Devuelve los codigos manuales desde el nivel mas granular al menos granular."""
     codigos = []
     for col in MANUAL_COLS:
         val = row.get(col)
         if pd.notna(val) and str(val).strip():
-            cod_norm = normalizar_codigo_iccs(val)
-            codigos.append(cod_norm)
+            cod_int = codigo_a_int(val)
+            if cod_int is not None:
+                codigos.append(cod_int)
     return codigos
+
+
+def _lista_a_texto(valor: Any) -> str:
+    """Convierte listas a texto legible."""
+    if valor is None:
+        return ""
+    if isinstance(valor, list):
+        return "; ".join([str(v) for v in valor if str(v).strip()])
+    if pd.isna(valor):
+        return ""
+    return str(valor)
+
+
+def _glosas_para_codigos(codigos: list[int], iccs_glosa_map: dict[str, str]) -> list[str]:
+    """Mapea codigos ICCS a glosas."""
+    return [iccs_glosa_map.get(cod, "") for cod in codigos]
+
+
+def _codigo_str(codigo: Any) -> str:
+    """Normaliza codigo como string numerico sin separadores."""
+    cod_int = codigo_a_int(codigo)
+    return str(cod_int) if cod_int is not None else ""
+
+
+def _tipo_relacion_jerarquia(codigo_llm: Any, codigo_manual: Any) -> str:
+    """
+    Relacion jerarquica entre codigo LLM y manual.
+    Retorna: exacto | llm_mas_desagregado | manual_mas_desagregado | sin_relacion
+    """
+    llm_str = _codigo_str(codigo_llm)
+    manual_str = _codigo_str(codigo_manual)
+    if not llm_str or not manual_str:
+        return "sin_relacion"
+    if llm_str == manual_str:
+        return "exacto"
+    if llm_str.startswith(manual_str):
+        return "llm_mas_desagregado"
+    if manual_str.startswith(llm_str):
+        return "manual_mas_desagregado"
+    return "sin_relacion"
+
+
+def _buscar_jerarquia_en_lista(codigo_llm: Any, codigos_manual: list[int]) -> tuple[bool, int | None, str]:
+    """Busca compatibilidad jerarquica (no exacta) entre codigo LLM y lista manual."""
+    for codigo_manual in codigos_manual:
+        relacion = _tipo_relacion_jerarquia(codigo_llm, codigo_manual)
+        if relacion in {"llm_mas_desagregado", "manual_mas_desagregado"}:
+            return True, codigo_manual, relacion
+    return False, None, "sin_relacion"
+
+
+def _buscar_match_topk(
+    row: pd.Series,
+    manual_set: set[int],
+    top_k: int = TOP_K,
+) -> tuple[int | None, int | None, str]:
+    """Busca si algun top-k coincide con los codigos manuales."""
+    for idx in range(1, top_k + 1):
+        codigo_col = f"top{idx}_codigo"
+        codigo = codigo_a_int(row.get(codigo_col, None))
+        if codigo is not None and codigo in manual_set:
+            glosa = row.get(f"top{idx}_glosa", "")
+            return codigo, idx, glosa
+    return None, None, ""
+
+
+def _buscar_match_topk_jerarquia(
+    row: pd.Series,
+    manual_codigos: list[int],
+    top_k: int = TOP_K,
+) -> tuple[int | None, int | None, str, int | None, str]:
+    """Busca primer top-k con compatibilidad jerarquica (no exacta) con lista manual."""
+    for idx in range(1, top_k + 1):
+        codigo_col = f"top{idx}_codigo"
+        codigo_topk = codigo_a_int(row.get(codigo_col, None))
+        if codigo_topk is None:
+            continue
+        coincide, codigo_manual_match, tipo_relacion = _buscar_jerarquia_en_lista(codigo_topk, manual_codigos)
+        if coincide:
+            glosa = row.get(f"top{idx}_glosa", "")
+            return codigo_topk, idx, glosa, codigo_manual_match, tipo_relacion
+    return None, None, "", None, "sin_relacion"
 
 
 def evaluar_contra_manual(
@@ -498,41 +683,182 @@ def evaluar_contra_manual(
         sheet_name="TC_2024",
         skiprows=1,
     )
-    manual_df["cnp_codigo"] = manual_df["CUM"].astype(str).str.strip()
+    manual_df["cnp_codigo"] = serie_a_int(manual_df["CUM"])
     manual_df["manual_codigos"] = manual_df.apply(_extraer_manual_codigos, axis=1)
-    manual_df["manual_codigo_granular"] = manual_df["manual_codigos"].apply(lambda xs: xs[0] if xs else "")
+    manual_df["manual_codigo_granular"] = manual_df["manual_codigos"].apply(
+        lambda xs: xs[0] if xs else pd.NA
+    ).astype("Int64")
     manual_df["glosa_manual"] = manual_df["GLOSA 2024"].astype(str)
-    manual_filtrado = manual_df[manual_df["manual_codigo_granular"] != ""].copy()
+    manual_df["manual_codigos_str"] = manual_df["manual_codigos"].apply(_lista_a_texto)
+    manual_df["manual_glosa_iccs"] = manual_df["manual_codigo_granular"].map(iccs_glosa_map).fillna("")
+    manual_df["manual_glosas_iccs"] = manual_df["manual_codigos"].apply(
+        lambda xs: _glosas_para_codigos(xs, iccs_glosa_map)
+    )
+    manual_df["manual_glosas_iccs_str"] = manual_df["manual_glosas_iccs"].apply(_lista_a_texto)
+    manual_filtrado = manual_df[manual_df["manual_codigo_granular"].notna()].copy()
 
     df_resultados = df_resultados.copy()
+    if "iccs_elegido" not in df_resultados.columns or "cnp_codigo" not in df_resultados.columns:
+        raise ValueError(
+            "La salida LLM no contiene columnas requeridas: se esperan 'cnp_codigo' e 'iccs_elegido'."
+        )
+
+    if "iccs_glosa_elegida" not in df_resultados.columns:
+        df_resultados["iccs_glosa_elegida"] = ""
+
+    df_resultados["cnp_codigo"] = serie_a_int(df_resultados["cnp_codigo"])
     df_resultados["iccs_elegido"] = df_resultados["iccs_elegido"].fillna("")
-    df_resultados["iccs_elegido_norm"] = df_resultados["iccs_elegido"].apply(normalizar_codigo_iccs)
+    df_resultados["iccs_elegido"] = serie_a_int(df_resultados["iccs_elegido"])
+    df_resultados["iccs_elegido_norm"] = df_resultados["iccs_elegido"]
+
+    def _glosa_por_codigo(codigo: Any) -> str:
+        if codigo is None or pd.isna(codigo):
+            return ""
+        return iccs_glosa_map.get(int(codigo), "")
+
     df_resultados["iccs_glosa_elegida"] = df_resultados.apply(
-        lambda r: r["iccs_glosa_elegida"] or iccs_glosa_map.get(r["iccs_elegido_norm"], ""),
+        lambda r: r["iccs_glosa_elegida"] or _glosa_por_codigo(r["iccs_elegido_norm"]),
         axis=1,
     )
+    if "exclusiones_aplicadas" in df_resultados.columns:
+        df_resultados["exclusiones_aplicadas_str"] = df_resultados["exclusiones_aplicadas"].apply(_lista_a_texto)
+
+    # Convertir codigos top-k a int
+    for idx in range(1, TOP_K + 1):
+        col = f"top{idx}_codigo"
+        if col in df_resultados.columns:
+            df_resultados[col] = serie_a_int(df_resultados[col])
+
+    df_resultados = completar_glosas_topk(df_resultados, iccs_glosa_map, top_k=TOP_K)
 
     comparacion = manual_filtrado.merge(df_resultados, on="cnp_codigo", how="left")
-    comparacion["llm_codigo"] = comparacion["iccs_elegido_norm"].fillna("")
-    comparacion["coincide"] = comparacion.apply(
-        lambda r: bool(r["llm_codigo"]) and r["llm_codigo"] in set(r.get("manual_codigos", [])),
+    comparacion["llm_codigo"] = comparacion["iccs_elegido_norm"]
+    comparacion["coincide_granular"] = comparacion.apply(
+        lambda r: pd.notna(r["llm_codigo"]) and r["llm_codigo"] == r["manual_codigo_granular"],
         axis=1,
     )
+    comparacion["coincide_manual"] = comparacion.apply(
+        lambda r: pd.notna(r["llm_codigo"]) and r["llm_codigo"] in set(r.get("manual_codigos", [])),
+        axis=1,
+    )
+    comparacion["coincide"] = comparacion["coincide_manual"]
+
+    comparacion["tipo_relacion_jerarquia_granular"] = comparacion.apply(
+        lambda r: _tipo_relacion_jerarquia(r["llm_codigo"], r["manual_codigo_granular"]),
+        axis=1,
+    )
+    comparacion["coincide_jerarquia_granular"] = comparacion["tipo_relacion_jerarquia_granular"].isin(
+        {"llm_mas_desagregado", "manual_mas_desagregado"}
+    )
+
+    jerarquia_manual = comparacion.apply(
+        lambda r: _buscar_jerarquia_en_lista(r["llm_codigo"], r.get("manual_codigos", [])),
+        axis=1,
+    )
+    comparacion["coincide_jerarquia_manual"] = jerarquia_manual.apply(lambda x: x[0])
+    comparacion["manual_match_jerarquia"] = jerarquia_manual.apply(lambda x: x[1])
+    comparacion["tipo_relacion_jerarquia_manual"] = jerarquia_manual.apply(lambda x: x[2])
+    comparacion["manual_match_jerarquia"] = serie_a_int(comparacion["manual_match_jerarquia"])
+    comparacion["manual_match_jerarquia_glosa"] = comparacion["manual_match_jerarquia"].map(iccs_glosa_map).fillna("")
+
+    topk_info = comparacion.apply(
+        lambda r: _buscar_match_topk(r, set(r.get("manual_codigos", []))), axis=1
+    )
+    comparacion["topk_match_codigo"] = topk_info.apply(lambda x: x[0])
+    comparacion["topk_match_rank"] = topk_info.apply(lambda x: x[1] if x[1] else pd.NA)
+    comparacion["topk_match_glosa"] = topk_info.apply(lambda x: x[2])
+    comparacion["topk_match_codigo"] = serie_a_int(comparacion["topk_match_codigo"])
+    comparacion["topk_match_rank"] = serie_a_int(comparacion["topk_match_rank"])
+    comparacion["topk_coincide_manual"] = comparacion["topk_match_codigo"].notna()
+
+    topk_jerarquia = comparacion.apply(
+        lambda r: _buscar_match_topk_jerarquia(r, r.get("manual_codigos", [])),
+        axis=1,
+    )
+    comparacion["topk_match_jerarquia_codigo"] = topk_jerarquia.apply(lambda x: x[0])
+    comparacion["topk_match_jerarquia_rank"] = topk_jerarquia.apply(lambda x: x[1] if x[1] else pd.NA)
+    comparacion["topk_match_jerarquia_glosa"] = topk_jerarquia.apply(lambda x: x[2])
+    comparacion["topk_match_jerarquia_manual_codigo"] = topk_jerarquia.apply(lambda x: x[3])
+    comparacion["topk_match_jerarquia_tipo"] = topk_jerarquia.apply(lambda x: x[4])
+    comparacion["topk_match_jerarquia_codigo"] = serie_a_int(comparacion["topk_match_jerarquia_codigo"])
+    comparacion["topk_match_jerarquia_rank"] = serie_a_int(comparacion["topk_match_jerarquia_rank"])
+    comparacion["topk_match_jerarquia_manual_codigo"] = serie_a_int(
+        comparacion["topk_match_jerarquia_manual_codigo"]
+    )
+    comparacion["topk_match_jerarquia_manual_glosa"] = comparacion["topk_match_jerarquia_manual_codigo"].map(
+        iccs_glosa_map
+    ).fillna("")
+    comparacion["topk_coincide_jerarquia_manual"] = comparacion["topk_match_jerarquia_codigo"].notna()
+
+    def _clasificar(row: pd.Series) -> tuple[str, str]:
+        if row["coincide_granular"]:
+            return "ok", "llm=granular"
+        if row["coincide_manual"]:
+            return "parcial", "llm=en_manual_codigos"
+        if row["coincide_jerarquia_granular"]:
+            if row["tipo_relacion_jerarquia_granular"] == "llm_mas_desagregado":
+                detalle = f"llm_mas_desagregado_que_manual_granular (manual={row['manual_codigo_granular']})"
+            else:
+                detalle = f"manual_mas_desagregado_que_llm (manual={row['manual_codigo_granular']})"
+            return "parcial", detalle
+        if row["coincide_jerarquia_manual"]:
+            if row["tipo_relacion_jerarquia_manual"] == "llm_mas_desagregado":
+                detalle = (
+                    f"llm_mas_desagregado_que_manual_codigos "
+                    f"(manual_match={row['manual_match_jerarquia']})"
+                )
+            else:
+                detalle = (
+                    f"manual_codigos_mas_desagregado_que_llm "
+                    f"(manual_match={row['manual_match_jerarquia']})"
+                )
+            return "parcial", detalle
+        if row["topk_coincide_manual"]:
+            detalle = f"topk_en_manual_codigos (top{row['topk_match_rank']})"
+            return "parcial", detalle
+        if row["topk_coincide_jerarquia_manual"]:
+            if row["topk_match_jerarquia_tipo"] == "llm_mas_desagregado":
+                detalle = (
+                    f"topk_jerarquia_llm_mas_desagregado (top{row['topk_match_jerarquia_rank']}, "
+                    f"manual_match={row['topk_match_jerarquia_manual_codigo']})"
+                )
+            else:
+                detalle = (
+                    f"topk_jerarquia_manual_mas_desagregado (top{row['topk_match_jerarquia_rank']}, "
+                    f"manual_match={row['topk_match_jerarquia_manual_codigo']})"
+                )
+            return "parcial", detalle
+        if pd.isna(row["llm_codigo"]):
+            return "no coincide", "sin_llm"
+        return "no coincide", "sin_match"
+
+    clasif = comparacion.apply(_clasificar, axis=1)
+    comparacion["COMPARACION"] = clasif.apply(lambda x: x[0])
+    comparacion["detalle_comparacion"] = clasif.apply(lambda x: x[1])
+    comparacion["justificacion_comparacion"] = comparacion["detalle_comparacion"]
 
     total_manual = len(manual_filtrado)
-    con_llm = (comparacion["llm_codigo"] != "").sum()
-    coincidencias = comparacion["coincide"].sum()
+    con_llm = comparacion["llm_codigo"].notna().sum()
+    coincidencias = (comparacion["COMPARACION"] == "ok").sum()
+    parciales = (comparacion["COMPARACION"] == "parcial").sum()
+    no_coincide = (comparacion["COMPARACION"] == "no coincide").sum()
     discrepancias = comparacion[
-        (comparacion["manual_codigo_granular"] != "") & (comparacion["llm_codigo"] != "") & (~comparacion["coincide"])
+        (comparacion["manual_codigo_granular"].notna())
+        & (comparacion["llm_codigo"].notna())
+        & (comparacion["COMPARACION"] == "no coincide")
     ]
-    sin_clas_llm = comparacion[(comparacion["manual_codigo_granular"] != "") & (comparacion["llm_codigo"] == "")]
+    sin_clas_llm = comparacion[
+        (comparacion["manual_codigo_granular"].notna()) & (comparacion["llm_codigo"].isna())
+    ]
 
     print(f"\n{'=' * 60}")
     print("EVALUACION VS CORRESPONDENCIA MANUAL:")
     print(f"  Total con etiqueta manual: {total_manual}")
     print(f"  LLM con codigo asignado: {con_llm}")
-    print(f"  Coincidencias: {coincidencias}")
-    print(f"  Discrepancias: {len(discrepancias)}")
+    print(f"  Coincidencias (OK): {coincidencias}")
+    print(f"  Parciales: {parciales}")
+    print(f"  No coincide: {no_coincide}")
+    print(f"  Discrepancias (LLM distinto y sin match): {len(discrepancias)}")
     print(f"  Manual con NINGUNA respuesta LLM: {len(sin_clas_llm)}")
     if len(discrepancias) > 0:
         print("  Muestras de discrepancias (codigo_manual -> codigo_llm):")
@@ -543,21 +869,59 @@ def evaluar_contra_manual(
             )
     print(f"{'=' * 60}")
 
+    topk_cols: list[str] = []
+    for idx in range(1, TOP_K + 1):
+        topk_cols.extend([f"top{idx}_codigo", f"top{idx}_glosa", f"top{idx}_score"])
+
     detalle_cols = [
         "cnp_codigo",
+        "cnp_glosa",
+        "cnp_descripcion",
+        "cnp_familia",
+        "cnp_articulado",
         "glosa_manual",
         "manual_codigo_granular",
+        "manual_glosa_iccs",
         "manual_codigos",
+        "manual_codigos_str",
+        "manual_glosas_iccs",
+        "manual_glosas_iccs_str",
+        "iccs_elegido",
+        "iccs_elegido_norm",
         "llm_codigo",
         "iccs_glosa_elegida",
         "confianza",
         "justificacion",
         "exclusiones_aplicadas",
-        "cnp_glosa",
-        "cnp_descripcion",
+        "exclusiones_aplicadas_str",
+        "coincide_granular",
+        "coincide_manual",
+        "coincide_jerarquia_granular",
+        "tipo_relacion_jerarquia_granular",
+        "coincide_jerarquia_manual",
+        "manual_match_jerarquia",
+        "manual_match_jerarquia_glosa",
+        "tipo_relacion_jerarquia_manual",
+        "topk_coincide_manual",
+        "topk_coincide_jerarquia_manual",
+        "COMPARACION",
+        "detalle_comparacion",
+        "justificacion_comparacion",
+        "topk_match_codigo",
+        "topk_match_rank",
+        "topk_match_glosa",
+        "topk_match_jerarquia_codigo",
+        "topk_match_jerarquia_rank",
+        "topk_match_jerarquia_glosa",
+        "topk_match_jerarquia_manual_codigo",
+        "topk_match_jerarquia_manual_glosa",
+        "topk_match_jerarquia_tipo",
+        *topk_cols,
     ]
     detalle = comparacion.copy()
-    detalle = detalle[[c for c in detalle_cols if c in detalle.columns]]
+    detalle_cols = [c for c in detalle_cols if c in detalle.columns]
+    extra_cols = [c for c in detalle.columns if c not in detalle_cols]
+    detalle = detalle[detalle_cols + extra_cols]
     salida_xlsx = output_dir / "comparacion_llm_vs_manual.xlsx"
     detalle.to_excel(salida_xlsx, index=False)
     print(f"OK Comparacion manual guardada: {salida_xlsx}")
@@ -590,7 +954,34 @@ def main():
     parser = argparse.ArgumentParser(description="Filtro LLM para clasificacion CNP -> ICCS (top-10, gpt-5-mini)")
     parser.add_argument("--test", action="store_true", help="Modo test: solo 10 codigos")
     parser.add_argument("--limite", type=int, help="Limite de codigos a procesar")
+    parser.add_argument(
+        "--modo",
+        choices=["llm", "comparar"],
+        help="Modo de ejecucion: llm (consulta LLM) o comparar (sin LLM)",
+    )
+    parser.add_argument(
+        "--llm-output",
+        type=str,
+        help="Ruta a la salida LLM para comparar (default: outputs/clasificacion_con_justificacion.csv)",
+    )
     args = parser.parse_args()
+
+    modo = args.modo or seleccionar_modo()
+    if modo == "salir":
+        print("Cancelado.")
+        sys.exit(0)
+
+    if modo == "comparar":
+        if args.test or args.limite:
+            print("Aviso: --test y --limite se ignoran en modo comparar.")
+
+        iccs_full_df = cargar_iccs_descripcion()
+        iccs_glosa_map = build_iccs_glosa_map(iccs_full_df)
+
+        llm_output_path = Path(args.llm_output) if args.llm_output else OUTPUT_DIR / "clasificacion_con_justificacion.csv"
+        df_resultados = cargar_salida_llm(llm_output_path)
+        evaluar_contra_manual(df_resultados, iccs_full_df, iccs_glosa_map, OUTPUT_DIR)
+        return
 
     matches_df, iccs_full_df = cargar_datos()
 
@@ -624,7 +1015,7 @@ def main():
         print("Cancelado.")
         sys.exit(0)
 
-    client = OpenAI(api_key=API_KEY)
+    client = get_openai_client()
 
     checkpoint_file = OUTPUT_DIR / "checkpoint.json"
     resultados = procesar_batch(
