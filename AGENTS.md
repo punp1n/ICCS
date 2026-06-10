@@ -1,7 +1,11 @@
 # Repository Guidelines
 
+> Documentación relacionada: [README.md](README.md) (pipeline completo) ·
+> [MODELO_DATOS.md](MODELO_DATOS.md) (modelo SQL Server) ·
+> [CNP/BD/README.md](CNP/BD/README.md) (carga a BD).
+
 ## Project Structure & Module Organization
-The repository centers on two automation tracks. `CNP/` stores raw Codificación Penal DOCX/XLSX per period plus `procesar_consolidado.py`, which consolidates the newest code definition into parquet/xlsx under the same folder. `Correspondencia automatica/` contains `iccs_tabla.py`, `parse_defs/*.csv`, and the generated `iccs_parse_final.*` outputs derived from `ICSS_PDF/*.pdf`. Manual adjudications live under `Correspondencia manual/<año>/`, while `ICCS_UNODC/` and `ICSS_PDF/` host reference material. Avoid editing generated `.xlsx/.parquet/.csv` directly; regenerate them via the scripts.
+The repository centers on three tracks. `CNP/` stores raw Codificación Penal DOCX/XLSX per period plus `procesar_consolidado.py`, which consolidates the newest code definition into parquet/xlsx under the same folder; `CNP/BD/` holds the SQL Server loaders (`cargar_*_sqlserver.py`) and DDL (`modelo_tablas_*.sql`). `Correspondencia automatica/` contains `scripts/generar_iccs_tabla.py` and `scripts/generar_iccs_descripcion.py`, `parse_defs/*.csv`, and the generated `outputs/iccs_tabla.*` / `outputs/iccs_descripcion.*` derived from `ICSS_PDF/*.pdf`; plus the `embeddings/`, `llm_filter/` and `ENUSC/` sub-pipelines. Manual adjudications live under `Correspondencia manual/<año>/`, while `ICCS_UNODC/` and `ICSS_PDF/` host reference material. Avoid editing generated `.xlsx/.parquet/.csv` directly; regenerate them via the scripts.
 
 ## Build, Test, and Development Commands
 Use Python 3.11+. Typical bootstrapping:
@@ -9,7 +13,7 @@ Use Python 3.11+. Typical bootstrapping:
 python -m venv .venv && source .venv/bin/activate
 pip install pandas pdfplumber openpyxl pyarrow
 ```
-Run the consolidator with `python CNP/procesar_consolidado.py`. Ensure `BASE_DIR` keeps pointing to the `CNP` folder before executing. Rebuild the ICCS lookup by running `python "Correspondencia automatica/iccs_tabla.py"`; confirm `ICCS_SPANISH_2016_web.pdf` is present and `parse_defs/*.csv` are up to date. Commands print progress counts—treat warnings about missing tables or CSVs as blockers.
+Run the consolidator with `python CNP/procesar_consolidado.py`. Ensure `BASE_DIR` keeps pointing to the `CNP` folder before executing. Rebuild the ICCS lookup by running `python "Correspondencia automatica/scripts/generar_iccs_descripcion.py"`; confirm `ICCS_SPANISH_2016_web.pdf` is present and `parse_defs/*.csv` are up to date. Load the SQL Server model with `python CNP/BD/cargar_cnp_sqlserver.py --load-sql` (then `cargar_agrupador_delito_sqlserver.py` and `cargar_iccs_sqlserver.py`); without `--load-sql` they only produce staging CSVs. Commands print progress counts—treat warnings about missing tables or CSVs as blockers.
 
 ## Coding Style & Naming Conventions
 Follow PEP 8 with 4-space indentation, descriptive `snake_case` variables, and docstrings for helpers that implement parsing logic. Use `pathlib.Path` for filesystem work and guard script entry points with `if __name__ == "__main__":`. Keep constants (paths, month maps, regex patterns) grouped near the top and document any locale-specific assumptions.

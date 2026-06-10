@@ -6,21 +6,13 @@ from pathlib import Path
 import pandas as pd
 from unicodedata import normalize as uni_normalize, combining
 
-BASE_DIR = Path(
+WINDOWS_BASE_DIR = Path(
     r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\CNP"
 )
+LOCAL_BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = WINDOWS_BASE_DIR if WINDOWS_BASE_DIR.exists() else LOCAL_BASE_DIR
 OUTPUT_XLSX = BASE_DIR / "consolidado_CNP_2025_2021.xlsx"
 OUTPUT_PARQUET = BASE_DIR / "consolidado_CNP_2025_2021.parquet"
-
-MANUAL_XLSX = (
-    BASE_DIR.parent
-    / "Correspondencia manual"
-    / "2024"
-    / "28072025_TC_Final_2023-2024_version completa.xlsx"
-)
-MANUAL_SHEET = "TC_2024"
-MANUAL_SKIPROWS = 1
-MANUAL_FLAG_VALUE = "agregado_correspondencia_manual"
 
 NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
@@ -46,7 +38,26 @@ LAW_NAMED = (
     r"LEY\s+(?:[A-Z0-9\.\u00c1\u00c9\u00cd\u00d3\u00da\u00dc\u00d1]{2,}"
     r"(?:\s+[A-Z0-9\.\u00c1\u00c9\u00cd\u00d3\u00da\u00dc\u00d1]{2,})*)(?=\s|$|[.;,:-])"
 )
-LEGAL_REF_PATTERN = re.compile(rf"(?:{ARTICLE_REF}|{LAW_NUMERIC}|{LAW_NAMED})", re.IGNORECASE)
+LEGAL_REF_PATTERN = re.compile(rf"(?:{ARTICLE_REF}|{LAW_NUMERIC})", re.IGNORECASE)
+
+DESCRIPTION_START_PATTERN = re.compile(
+    r"\b(?:"
+    r"SANCIONA(?:N)?|SE\s+SANCIONA|EL\s+QUE|LA\s+QUE|LOS\s+QUE|LAS\s+QUE|"
+    r"TAMBI[EÉ]N\s+SE\s+CONSIDERA|APROPIACI[ÓO]N|CASTIGA|CONSISTE|COMETE|"
+    r"INCURR(?:E|IR[AÁ])|PENALIZA|SE\s+ENTENDER[ÁA]"
+    r")\b",
+    re.IGNORECASE,
+)
+
+INLINE_BREAK_PATTERN = re.compile(
+    r"(?<!\s)(?=(?:"
+    r"ARTS?\.?|ARTICULO|ARTICULOS|LEY\b|DL\b|D\.L\.|D\.F\.L\.|DFL\b|DECRETO\s+LEY|"
+    r"SANCIONA(?:N)?|SE\s+SANCIONA|EL\s+QUE|LA\s+QUE|LOS\s+QUE|LAS\s+QUE|"
+    r"TAMBI[EÉ]N\s+SE\s+CONSIDERA|APROPIACI[ÓO]N|CASTIGA|CONSISTE|COMETE|"
+    r"INCURR(?:E|IR[AÁ])|PENALIZA|SE\s+ENTENDER[ÁA]"
+    r"))",
+    re.IGNORECASE,
+)
 
 
 def normalize_whitespace(text: str) -> str:
@@ -70,6 +81,15 @@ def normalize_no_accents_lower(text: str) -> str:
     decomposed = uni_normalize("NFD", text)
     stripped = "".join(ch for ch in decomposed if not combining(ch))
     return stripped.lower()
+
+
+def normalize_inline_breaks(text: str) -> str:
+    """Repara celdas DOCX donde glosa, articulos y descripcion quedan concatenados."""
+    normalized = normalize_whitespace(text)
+    if not normalized:
+        return ""
+    normalized = INLINE_BREAK_PATTERN.sub(" ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def get_text_from_cell(tc):
@@ -128,26 +148,55 @@ def split_leading_legal_refs(text):
 
 def split_glosa_content(raw_text):
     """
-    Retorna la glosa completa sin procesar referencias legales.
+    Separa glosa, referencias legales iniciales y descripcion cuando vienen en la misma celda.
     """
     if not raw_text:
         return "", [], []
 
-    text = normalize_whitespace(raw_text)
+    text = normalize_inline_breaks(raw_text)
+    desc_match = DESCRIPTION_START_PATTERN.search(text)
 
-    # Devolver la glosa completa sin intentar extraer referencias legales
-    return text, [], []
+    if desc_match:
+        prefix = text[: desc_match.start()].strip(" .;:-")
+        desc_text = text[desc_match.start():].strip()
+        legal_match = LEGAL_REF_PATTERN.search(prefix)
+
+        if legal_match:
+            glosa_text = prefix[: legal_match.start()].strip(" .;:-")
+            refs_text = prefix[legal_match.start():].strip(" .;:-")
+            refs = [refs_text] if refs_text else []
+            descs = [desc_text] if desc_text else []
+            return glosa_text or text, refs, descs
+
+        return prefix or text, [], ([desc_text] if desc_text else [])
+
+    legal_match = LEGAL_REF_PATTERN.search(text)
+    if legal_match and legal_match.start() > 0 and text[legal_match.start() - 1] in ".;:)]":
+        glosa_text = text[: legal_match.start()].strip(" .;:-")
+        refs_text = text[legal_match.start():].strip(" .;:-")
+        return glosa_text or text, ([refs_text] if refs_text else []), []
+
+    return text.strip(" .;:-"), [], []
 
 
 def parse_article_description(text):
-    """Retorna la descripción completa sin procesar referencias legales."""
+    """Separa referencias legales iniciales de la descripcion en filas de detalle."""
     if not text:
         return [], ""
 
-    cleaned = normalize_whitespace(text)
+    cleaned = normalize_inline_breaks(text)
     cleaned = re.sub(r"^[\s\.;:-]+", "", cleaned)
+    desc_match = DESCRIPTION_START_PATTERN.search(cleaned)
+    if desc_match:
+        refs_text = cleaned[: desc_match.start()].strip(" .;:-")
+        desc_text = cleaned[desc_match.start():].strip()
+        refs = [refs_text] if refs_text else []
+        return refs, desc_text
 
-    # Devolver la descripción completa sin intentar extraer referencias legales
+    refs, remainder = split_leading_legal_refs(cleaned)
+    if refs:
+        return refs, remainder.strip()
+
     return [], cleaned.strip()
 
 
@@ -345,37 +394,6 @@ def main():
                     "ultimo_vigente": period,
                 }
             )
-
-        existing_codes = {row["codigo"] for row in final_rows}
-        manual_added = []
-
-        if MANUAL_XLSX.exists():
-            manual_df = pd.read_excel(
-                MANUAL_XLSX, sheet_name=MANUAL_SHEET, skiprows=MANUAL_SKIPROWS, dtype=str
-            )
-            for _, row in manual_df.iterrows():
-                cum_value = safe_cell(row.get("CUM", ""))
-                if not cum_value or cum_value in existing_codes:
-                    continue
-
-                glosa_manual = safe_cell(row.get("GLOSA 2024", ""))
-                desc_manual = safe_cell(row.get("Descripci\u00f3n 2024", ""))
-
-                final_rows.append(
-                    {
-                        "codigo": cum_value,
-                        "familia_nombre": "",
-                        "glosa": glosa_manual,
-                        "descripcion": desc_manual,
-                        "ultimo_vigente": MANUAL_FLAG_VALUE,
-                    }
-                )
-                existing_codes.add(cum_value)
-                manual_added.append(cum_value)
-
-            print(f"Correspondencia manual agregada: {len(manual_added)} codigos.")
-        else:
-            print(f"Warning: Manual correspondence file not found: {MANUAL_XLSX}")
 
         df = pd.DataFrame(final_rows)
 

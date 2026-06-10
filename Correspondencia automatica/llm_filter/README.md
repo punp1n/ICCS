@@ -5,7 +5,7 @@ Pipeline de filtrado inteligente que utiliza GPT-4o-mini para elegir el mejor c√
 ## Instalaci√≥n
 
 ```bash
-cd "C:\Users\asvm2\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\llm_filter"
+cd "Correspondencia automatica/llm_filter"
 
 # Instalar dependencias
 pip install -r requirements.txt

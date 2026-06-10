@@ -18,7 +18,9 @@ __pycache__/
 # ENTORNOS VIRTUALES
 # ============================================
 .venv/
+.venv_*/
 venv/
+*_venv/
 ENV/
 env/
 .virtualenv/
@@ -54,6 +56,10 @@ desktop.ini
 *.xls
 *.parquet
 *.feather
+
+# Staging generado por los loaders SQL Server (CNP/BD)
+CNP/BD/staging/
+CNP/BD/staging_iccs/
 
 # EXCEPCIÓN: Permitir archivos de correspondencia manual específicos si son necesarios
 # Descomenta la siguiente línea si necesitas subir la correspondencia manual de referencia:
@@ -181,7 +187,6 @@ config_secret.py
 # Archivos legacy y archive
 archive/
 */archive/
-generar_iccs_tabla.py
 
 # Carpetas de referencia (no necesarias en repo)
 ICCS_UNODC/

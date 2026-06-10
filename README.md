@@ -16,6 +16,23 @@ Este proyecto implementa un pipeline automatizado para clasificar delitos del C�
 
 ---
 
+## Documentación del Proyecto
+
+Este README es la **guía maestra** del pipeline. La documentación está organizada así:
+
+| Documento | Contenido |
+|---|---|
+| **README.md** (este archivo) | Visión general, pipeline completo (Fases 1–6) |
+| [MODELO_DATOS.md](MODELO_DATOS.md) | Modelo de datos relacional en SQL Server (esquemas `cum` y `cods`) |
+| [AGENTS.md](AGENTS.md) | Guía para contribuir / asistentes de IA, convenciones de código |
+| [CNP/BD/README.md](CNP/BD/README.md) | Carga CNP/CUM e ICCS a SQL Server (operativo) |
+| [Correspondencia automatica/scripts/README.md](Correspondencia%20automatica/scripts/README.md) | Generación de tablas ICCS |
+| [Correspondencia automatica/embeddings/README.md](Correspondencia%20automatica/embeddings/README.md) | Embeddings y búsqueda vectorial CNP→ICCS |
+| [Correspondencia automatica/llm_filter/README.md](Correspondencia%20automatica/llm_filter/README.md) | Filtro LLM (decisión final) |
+| [Correspondencia automatica/ENUSC/README.md](Correspondencia%20automatica/ENUSC/README.md) | Top-10 CNP/CUM por embeddings para glosas ENUSC |
+
+---
+
 ## Tabla de Contenidos
 
 1. [Arquitectura del Sistema](#arquitectura-del-sistema)
@@ -26,6 +43,8 @@ Este proyecto implementa un pipeline automatizado para clasificar delitos del C�
    - [Fase 2: Preparación de Datos ICCS](#fase-2-preparación-de-datos-iccs)
    - [Fase 3: Generación de Embeddings y Búsqueda Vectorial](#fase-3-generación-de-embeddings-y-búsqueda-vectorial)
    - [Fase 4: Clasificación con LLM](#fase-4-clasificación-con-llm)
+   - [Fase 5: Carga al Modelo de Datos SQL Server](#fase-5-carga-al-modelo-de-datos-sql-server)
+   - [Fase 6 (auxiliar): Mapeo ENUSC → CNP/CUM](#fase-6-auxiliar-mapeo-enusc--cnpcum)
 5. [Estructura de Archivos](#estructura-de-archivos)
 6. [Salidas del Sistema](#salidas-del-sistema)
 7. [Evaluación y Métricas](#evaluación-y-métricas)
@@ -556,6 +575,47 @@ EVALUACION VS CORRESPONDENCIA MANUAL:
 
 ---
 
+### Fase 5: Carga al Modelo de Datos SQL Server
+
+**Objetivo**: Persistir el catálogo CNP/CUM, el catálogo ICCS y las correspondencias
+(manual + automática) en una base relacional SQL Server, con vigencia por periodo y
+una resolución final por CUM.
+
+**Scripts** (`CNP/BD/`):
+- `cargar_cnp_sqlserver.py` — arma staging desde DOCX CAPJ + plantilla INE + histórico y carga el esquema `cum`.
+- `cargar_agrupador_delito_sqlserver.py` — actualiza `cum.cnp_periodo.agrupador_delito` desde los XLSX de codificación.
+- `cargar_iccs_sqlserver.py` — carga el catálogo ICCS y las correspondencias en el esquema `cods`.
+- `modelo_tablas_cum_cod.sql` / `modelo_tablas_iccs_cod.sql` — DDL idempotente.
+
+**Modelo**: dos esquemas — `cum` (nacional) y `cods` (ICCS + correspondencias).
+Descripción completa de tablas, relaciones y consultas en **[MODELO_DATOS.md](MODELO_DATOS.md)**;
+detalle operativo de carga en **[CNP/BD/README.md](CNP/BD/README.md)**.
+
+**Ejecución** (desde la raíz del repo):
+```bash
+python CNP/BD/cargar_cnp_sqlserver.py --load-sql
+python CNP/BD/cargar_agrupador_delito_sqlserver.py --load-sql
+python CNP/BD/cargar_iccs_sqlserver.py --load-sql
+```
+
+**Salida principal**: tabla `cods.cum_iccs_periodo` (ICCS final por CUM y periodo) y
+vista `cum.vw_cnp_catalogo` (catálogo CUM con vigencia resuelta).
+
+---
+
+### Fase 6 (auxiliar): Mapeo ENUSC → CNP/CUM
+
+**Objetivo**: Calcular los top-10 códigos CUM/CNP más cercanos a las glosas de la
+Encuesta Nacional Urbana de Seguridad Ciudadana (ENUSC) por similitud de embeddings,
+**sin etapa LLM**.
+
+**Script**: `Correspondencia automatica/ENUSC/generar_top10_enusc_cnp.py`
+(modelo `intfloat/multilingual-e5-large`, mean pooling + coseno).
+
+Detalle y salidas en **[Correspondencia automatica/ENUSC/README.md](Correspondencia%20automatica/ENUSC/README.md)**.
+
+---
+
 ## Estructura de Archivos
 
 Para facilitar la reproducibilidad y mantenimiento, se recomienda la siguiente estructura de carpetas para el repositorio limpio:
@@ -566,8 +626,18 @@ ICCS/
 ├── README.md                          # Este archivo (documentación principal)
 ├── .gitignore                         # Exclusiones para control de versiones
 │
+├── MODELO_DATOS.md                    # Modelo de datos SQL Server (esquemas cum/cods)
+├── AGENTS.md                          # Guía de contribución / asistentes IA
+│
 ├── CNP/                               # Procesamiento de Código Penal Nacional
 │   ├── procesar_consolidado.py       # Script de consolidación
+│   ├── BD/                            # Carga a SQL Server (Fase 5)
+│   │   ├── modelo_tablas_cum_cod.sql  # DDL esquema cum
+│   │   ├── modelo_tablas_iccs_cod.sql # DDL esquema cods
+│   │   ├── cargar_cnp_sqlserver.py
+│   │   ├── cargar_agrupador_delito_sqlserver.py
+│   │   ├── cargar_iccs_sqlserver.py
+│   │   └── staging/ , staging_iccs/   # CSV intermedios (NO subir)
 │   ├── 2025_julio/                    # Carpetas por periodo (solo en local)
 │   ├── 2025_enero/
 │   ├── ...
@@ -605,16 +675,21 @@ ICCS/
 │   │       ├── matches_reporte.txt
 │   │       └── metadata_embeddings.json
 │   │
-│   └── llm_filter/
-│       ├── filtrar_con_llm.py           # Script LLM
-│       ├── requirements.txt             # Dependencias (SUBIR)
-│       ├── .venv/                       # Entorno virtual (NO subir)
-│       └── outputs/                     # Salidas LLM (NO subir)
-│           ├── clasificacion_final.csv
-│           ├── clasificacion_con_justificacion.csv
-│           ├── comparacion_llm_vs_manual.xlsx
-│           ├── errores.log
-│           └── checkpoint.json
+│   ├── llm_filter/
+│   │   ├── filtrar_con_llm.py           # Script LLM
+│   │   ├── requirements.txt             # Dependencias (SUBIR)
+│   │   ├── .venv/                       # Entorno virtual (NO subir)
+│   │   └── outputs/                     # Salidas LLM (NO subir)
+│   │       ├── clasificacion_final.csv
+│   │       ├── clasificacion_con_justificacion.csv
+│   │       ├── comparacion_llm_vs_manual.xlsx
+│   │       ├── errores.log
+│   │       └── checkpoint.json
+│   │
+│   └── ENUSC/                           # Mapeo ENUSC → CNP/CUM (Fase 6 auxiliar)
+│       ├── generar_top10_enusc_cnp.py
+│       ├── requirements.txt
+│       └── outputs/                     # Top-10 ENUSC (NO subir)
 │
 └── Correspondencia manual/              # Etiquetas manuales para validación
     └── 2024/
@@ -816,7 +891,8 @@ cnp_weights = {
 
 **Equipo**: Sección Seguridad Pública y Justicia - Instituto Nacional de Estadísticas (INE), Chile
 **Proyecto**: Clasificación Automatizada de Delitos CNP-ICCS
-**Fecha**: Diciembre 2025
+**Repositorio**: https://github.com/punp1n/ICCS
+**Última actualización**: Junio 2026
 
 ---
 
