@@ -58,9 +58,16 @@ Este README es la **guía maestra** del pipeline. La documentación está organi
 
 El sistema utiliza una arquitectura híbrida que combina:
 
-1. **Procesamiento Local (GPU)**: Generación de embeddings semánticos con modelo `intfloat/multilingual-e5-large`
-2. **Razonamiento en Nube (API)**: Clasificación final con modelo `gpt-4o-mini` de OpenAI
-3. **Validación Experta**: Comparación contra correspondencia manual para evaluar precisión
+1. **Recuperación semántica (embeddings)**: candidatos ICCS con `Qwen/Qwen3-Embedding-0.6B`
+2. **Rerank (cross-encoder)**: reordenamiento del top-k con `BAAI/bge-reranker-v2-m3` (en CPU se usó `BAAI/bge-reranker-base` por velocidad)
+3. **Razonamiento legal (LLM local)**: decisión final con `qwen3:8b` vía **Ollama** (sin API externa)
+4. **Validación Experta**: comparación contra la correspondencia manual (`ICCS_2025`)
+
+> **Actualización 10/06/2026**: se migró el modelo de embeddings a Qwen3, se añadió
+> un paso de **rerank**, el insumo CNP pasó a la tabla **TC_2025** (668 códigos) y el
+> filtro LLM migró de la API de OpenAI a **Ollama (`qwen3:8b`)** local. Detalle por
+> etapa en [2_embeddings/README.md](Correspondencia%20automatica/2_embeddings/README.md)
+> y [3_llm_filter/README.md](Correspondencia%20automatica/3_llm_filter/README.md).
 
 ### Diagrama de Flujo
 
@@ -298,9 +305,16 @@ python generar_iccs_descripcion.py
 
 ---
 
-### Fase 3: Generación de Embeddings y Búsqueda Vectorial
+### Fase 3: Generación de Embeddings, Búsqueda Vectorial y Rerank
 
-**Objetivo**: Generar representaciones vectoriales semánticas de CNP e ICCS y encontrar los top-k candidatos más similares para cada código CNP.
+**Objetivo**: Generar representaciones vectoriales semánticas de CNP e ICCS, encontrar los top-k candidatos más similares para cada código CNP y **reordenarlos con un cross-encoder**.
+
+> **Vigente (10/06/2026)**: embeddings con `Qwen/Qwen3-Embedding-0.6B` + rerank con
+> `BAAI/bge-reranker-v2-m3`, insumo CNP `TC_2025` (668 códigos), y evaluación A/B a
+> nivel sección contra `ICCS_2025`. Guía operativa y comandos actualizados en
+> **[2_embeddings/README.md](Correspondencia%20automatica/2_embeddings/README.md)**.
+> Las subsecciones siguientes describen el enfoque previo (e5 multi-campo) y se
+> conservan como referencia metodológica.
 
 **Script**: `Correspondencia automatica/2_embeddings/preparar_embeddings.py`
 
@@ -404,11 +418,16 @@ python preparar_embeddings.py --device cpu     # Forzar CPU
 
 ---
 
-### Fase 4: Clasificación con LLM
+### Fase 4: Clasificación con LLM (Ollama)
 
-**Objetivo**: Aplicar razonamiento legal experto para elegir el mejor código ICCS entre los candidatos top-k, considerando exclusiones, notas y gravedad del delito.
+**Objetivo**: Aplicar razonamiento legal experto para elegir el mejor código ICCS entre los candidatos top-k (reordenados), considerando exclusiones, notas y el móvil del delito.
 
-**Script**: `Correspondencia automatica/3_llm_filter/filtrar_con_llm.py`
+> **Vigente (10/06/2026)**: el filtro migró de la API de OpenAI a un **modelo local
+> `qwen3:8b` vía Ollama** (sin API key). Script: `3_llm_filter/filtrar_con_llm_ollama.py`.
+> Guía en **[3_llm_filter/README.md](Correspondencia%20automatica/3_llm_filter/README.md)**.
+> Las subsecciones siguientes describen el flujo OpenAI previo (legacy).
+
+**Script (legacy OpenAI)**: `Correspondencia automatica/3_llm_filter/filtrar_con_llm.py`
 
 **Entrada**:
 - `Correspondencia automatica/2_embeddings/outputs/matches_detallado.csv`
@@ -893,7 +912,7 @@ cnp_weights = {
 **Equipo**: Sección Seguridad Pública y Justicia - Instituto Nacional de Estadísticas (INE), Chile
 **Proyecto**: Clasificación Automatizada de Delitos CNP-ICCS
 **Repositorio**: https://github.com/punp1n/ICCS
-**Última actualización**: Junio 2026
+**Última actualización**: 10 de junio de 2026
 
 ---
 

@@ -15,6 +15,8 @@ pip install pandas pdfplumber openpyxl pyarrow
 ```
 Run the consolidator with `python CNP/procesar_consolidado.py`. Ensure `BASE_DIR` keeps pointing to the `CNP` folder before executing. Rebuild the ICCS lookup by running `python "Correspondencia automatica/1_iccs/generar_iccs_descripcion.py"`; confirm `ICCS_SPANISH_2016_web.pdf` is present and `parse_defs/*.csv` are up to date. Load the SQL Server model with `python CNP/BD/cargar_cnp_sqlserver.py --load-sql` (then `cargar_agrupador_delito_sqlserver.py` and `cargar_iccs_sqlserver.py`); without `--load-sql` they only produce staging CSVs. Commands print progress counts—treat warnings about missing tables or CSVs as blockers.
 
+**Embeddings/rerank stage (10/06/2026).** The ML stage runs under WSL with a venv outside OneDrive (`~/.venvs/iccs`, Python 3.12, CPU torch) because OneDrive breaks Linux venv symlinks. Recreate it from `Correspondencia automatica/2_embeddings/requirements.txt`. Models: `Qwen/Qwen3-Embedding-0.6B` (embeddings) and `BAAI/bge-reranker-v2-m3` (rerank). Run from `2_embeddings/`: `preparar_embeddings.py` → `rerank_matches.py` → `evaluar_ab.py`. The LLM stage (`3_llm_filter/filtrar_con_llm_ollama.py`) targets a local `qwen3:8b` via Ollama and is meant to run on the GPU machine.
+
 ## Coding Style & Naming Conventions
 Follow PEP 8 with 4-space indentation, descriptive `snake_case` variables, and docstrings for helpers that implement parsing logic. Use `pathlib.Path` for filesystem work and guard script entry points with `if __name__ == "__main__":`. Keep constants (paths, month maps, regex patterns) grouped near the top and document any locale-specific assumptions.
 

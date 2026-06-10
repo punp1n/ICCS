@@ -1,4 +1,10 @@
-openai>=1.0.0
-pandas>=2.0.0
-tqdm>=4.65.0
-python-dotenv>=1.0.0
+# Etapa 3: filtro LLM con Ollama (qwen3:8b) — local, sin API key.
+# Requiere Ollama instalado y el modelo descargado:
+#   ollama pull qwen3:8b
+# El script usa la API HTTP de Ollama vía urllib (stdlib), no necesita 'requests'.
+pandas>=2.0
+tqdm>=4.65
+
+# --- Legacy (script OpenAI filtrar_con_llm.py, en desuso) ---
+# openai>=1.0.0
+# python-dotenv>=1.0.0

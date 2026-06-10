@@ -1,115 +1,64 @@
-# Filtro LLM - CNP a ICCS
+# Etapa 3 — Filtro LLM (CNP → ICCS) con Ollama
 
-Pipeline de filtrado inteligente que utiliza GPT-4o-mini para elegir el mejor código ICCS entre los top-5 candidatos generados por embeddings.
+Razonamiento legal sobre el **top-10 reordenado** de la etapa 2: el LLM elige el
+mejor código ICCS por delito CNP, considerando exclusiones, notas y el **móvil
+del delito** (no la consecuencia más grave).
 
-## Instalación
+> Actualizado al 10/06/2026: **migración de la API de OpenAI a un modelo local
+> con Ollama (`qwen3:8b`)**. Ya no se usa API key. El script nuevo es
+> `filtrar_con_llm_ollama.py`. El script anterior (`filtrar_con_llm.py`, OpenAI)
+> queda como referencia/legacy.
+
+## Estado
+
+⚠️ **Preparado pero NO ejecutado en esta máquina** (CPU-only). Está pensado para
+correr en la máquina con GPU. Aquí solo se dejó listo el pipeline hasta
+embeddings + rerank (etapa 2).
+
+## Requisitos
 
 ```bash
-cd "Correspondencia automatica/3_llm_filter"
+# Instalar Ollama (https://ollama.com) y descargar el modelo:
+ollama pull qwen3:8b
+# Dejar el servicio activo (ollama serve o el servicio del SO).
 
-# Instalar dependencias
-pip install -r requirements.txt
+pip install -r requirements.txt   # pandas, tqdm (la API se usa vía urllib)
 ```
+
+## Insumo
+
+`2_embeddings/outputs/qwen3/matches_rerank_detallado.csv` (top-10 reordenado).
+Si no existe el rerank, usa `matches_detallado.csv` (solo embeddings).
+Las exclusiones/notas se obtienen de `1_iccs/outputs/iccs_descripcion.csv`.
 
 ## Uso
 
-### Modo Test (recomendado para primera ejecución)
-
-Procesa solo 10 códigos CNP para verificar que todo funciona:
-
 ```bash
-python filtrar_con_llm.py --test
+python filtrar_con_llm_ollama.py --test           # 10 códigos (prueba)
+python filtrar_con_llm_ollama.py                  # todos los CNP
+python filtrar_con_llm_ollama.py --model qwen3:8b --host http://localhost:11434
 ```
 
-### Procesamiento Completo
+Detalles de la llamada: API HTTP `POST /api/chat`, `format=json`,
+`think=false` (desactiva el razonamiento extendido de Qwen3), `temperature=0.1`.
+Reintentos automáticos (3) ante fallos de red o JSON inválido.
 
-Procesa todos los códigos CNP (~565):
+## Criterios de decisión (en el prompt)
 
-```bash
-python filtrar_con_llm.py
-```
+- Elegir el código **más preciso**, no el más específico.
+- **Exclusiones** como filtro crítico; **notas** como contexto.
+- **Móvil del delito**: "Robo con homicidio" → ROBO; "Secuestro extorsivo" → SECUESTRO.
+- Delitos sin descripción: clasificar con glosa + familia.
+- Anti-alucinación: elegir de los candidatos o de un código mencionado en
+  exclusiones/inclusiones; si no aplica ninguno, `NINGUNO`.
 
-### Opciones Avanzadas
+## Salidas (`outputs/`)
 
-```bash
-# Procesar solo los primeros 50 códigos
-python filtrar_con_llm.py --limite 50
+- `clasificacion_final.csv` — compacto (`cnp_codigo`, `cnp_glosa`, `iccs_elegido`, `iccs_glosa_elegida`, `confianza`).
+- `clasificacion_con_justificacion.csv` — completo con `justificacion` y `exclusiones_aplicadas`.
 
-# Cambiar el número de candidatos (default: 5)
-python filtrar_con_llm.py --top-k 3
-```
+## Archivos
 
-## Flujo de Procesamiento
-
-1. **Carga de datos**:
-   - `matches_detallado.csv`: Top-10 candidatos por código CNP
-   - `iccs_descripcion.csv`: Información completa de ICCS (incluyendo exclusiones y notas)
-
-2. **Preparación**:
-   - Agrupa matches por código CNP
-   - Selecciona top-5 por defecto
-   - Hace JOIN con ICCS para obtener exclusiones y notas críticas
-
-3. **Procesamiento LLM**:
-   - Construye prompt estructurado con toda la información
-   - Llama a GPT-4o-mini con temperatura baja (0.1) para consistencia
-   - Parsea respuesta JSON con validación
-
-4. **Criterios de Decisión del LLM**:
-   - ✅ Precisión sobre especificidad (puede elegir código general si es más exacto)
-   - ✅ Considera EXCLUSIONES como filtros críticos
-   - ✅ Usa NOTAS para contexto legal
-   - ✅ Puede devolver "NINGUNO" si ningún candidato aplica
-   - ✅ Score de similitud es orientativo, no determinante
-
-5. **Salidas**:
-   - `clasificacion_final.csv`: Compacto (solo columnas esenciales)
-   - `clasificacion_con_justificacion.csv`: Completo con razonamiento del LLM
-   - `errores.log`: Códigos que fallaron (si los hay)
-   - `checkpoint.json`: Checkpoint automático cada 10 códigos (se elimina al terminar)
-
-## Formato de Respuesta del LLM
-
-```json
-{
-  "iccs_elegido": "101",
-  "confianza": "alta",
-  "justificacion": "El delito CNP de HOMICIDIO coincide exactamente con la definición ICCS 101 (Homicidio intencional). Las exclusiones no aplican.",
-  "exclusiones_aplicadas": []
-}
-```
-
-## Características
-
-✅ **Checkpoint automático**: Se guarda progreso cada 10 códigos
-✅ **Reintentos**: 3 intentos por código con backoff exponencial
-✅ **Estimación de costo**: Calcula costo antes de ejecutar
-✅ **Validación JSON**: Verifica estructura de respuestas
-✅ **Join automático**: Obtiene exclusiones/notas de iccs_descripcion.csv
-✅ **Barra de progreso**: Con tqdm para seguimiento visual
-
-## Costos Estimados (GPT-4o-mini)
-
-- **Test (10 códigos)**: ~$0.004 USD
-- **Completo (~565 códigos)**: ~$0.24 USD
-
-Costos muy bajos gracias a GPT-4o-mini.
-
-## Estadísticas Generadas
-
-Al finalizar, el script muestra:
-- Total procesados
-- Cantidad de "NINGUNO" asignados
-- Distribución de confianza (alta/media/baja)
-- % de coincidencia con top-1 de embeddings
-
-## Troubleshooting
-
-**Error: "No se encuentra matches_detallado.csv"**
-→ Ejecuta primero `preparar_embeddings.py` en la carpeta 2_embeddings
-
-**Error de API Key**
-→ Verifica que la API key de OpenAI sea válida y tenga créditos
-
-**Rate limit error**
-→ El script reintenta automáticamente con backoff exponencial
+- `filtrar_con_llm_ollama.py` — **filtro actual (Ollama)**.
+- `filtrar_con_llm.py` — versión OpenAI (legacy, referencia).
+- `comparar_clasificaciones.py` — comparación auto vs manual (diagnóstico).
