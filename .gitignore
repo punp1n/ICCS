@@ -71,7 +71,6 @@ CNP/BD/staging_iccs/
 # EXCEPCIONES IMPORTANTES: Archivos CSV de configuración que SÍ se deben subir
 !parse_defs/*.csv
 !Correspondencia*automatica/parse_defs/*.csv
-!Correspondencia*automatica/outputs/iccs_parse_final.csv
 
 # ============================================
 # OUTPUTS Y ARTIFACTS (NO SUBIR)

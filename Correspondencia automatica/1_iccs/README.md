@@ -60,7 +60,7 @@ Para generar ambos archivos:
 
 ```bash
 # Ejecutar con Python de Spyder
-cd scripts
+cd "Correspondencia automatica/1_iccs"
 python generar_iccs_tabla.py
 python generar_iccs_descripcion.py
 ```
@@ -69,4 +69,4 @@ Los archivos de salida se generarán en la carpeta `outputs/`.
 
 ## Archivos de respaldo
 
-Los archivos anteriores se encuentran en la carpeta `archive/`.
+Los archivos anteriores se encuentran en la carpeta `../archive/`.

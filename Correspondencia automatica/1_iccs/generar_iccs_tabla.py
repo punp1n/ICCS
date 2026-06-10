@@ -12,15 +12,11 @@ import pdfplumber
 PDF_PATH = Path(
     r"C:\\Users\\Asvaldebenitom\\OneDrive - Instituto Nacional de Estadisticas\\Seguridad y justicia\\ICCS\\ICSS_PDF\\ICCS_SPANISH_2016_web.pdf"
 )
-BASE_DIR = Path(
-    r"C:\\Users\\Asvaldebenitom\\OneDrive - Instituto Nacional de Estadisticas\\Seguridad y justicia\\ICCS\\Correspondencia automatica"
-)
-PARSE_DEFS_DIR = BASE_DIR / "parse_defs"
-OUTPUT_DIR = BASE_DIR / "outputs"
+OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 START_PAGE_INDEX = 25  # pagina 26 (0-indexado)
 END_PAGE_INDEX = 33  # pagina 34 (0-indexado)
 MAX_SECTION = 11
-OUTPUT_BASENAME = "iccs_descripcion"
+OUTPUT_BASENAME = "iccs_tabla"
 
 SECTION_PATTERN = re.compile(r"Secci\u00f3n\s+(\d+)\s+(.*)", re.IGNORECASE)
 CODE_PATTERN = re.compile(r"^(\d{4,6})\s*(.*)$")
@@ -62,10 +58,9 @@ def _find_next_code_line(
     return None, None
 
 
-def extract_section_mapping() -> Dict[int, str]:
-    """Extrae el mapeo de codigo_iccs -> seccion desde el PDF."""
+def extract_section_data() -> List[Dict[str, Any]]:
     lines = _load_pdf_lines()
-    mapping: Dict[int, str] = {}
+    records: List[Dict[str, Any]] = []
     current_section: Optional[str] = None
     current_section_name: Optional[str] = None
     current_entry: Optional[Dict[str, Any]] = None
@@ -75,9 +70,18 @@ def extract_section_mapping() -> Dict[int, str]:
         nonlocal current_entry
         if not current_entry:
             return
+        description = _normalize_text(current_entry["desc_parts"])
         code = current_entry["code"]
-        codigo_iccs = int(code)
-        mapping[codigo_iccs] = current_entry["section_name"]
+        code_len = len(code)
+        entry = {
+            "nivel_1": int(code[:2]),
+            "nivel_2": int(code[:4]),
+            "nivel_3": int(code[:5]) if code_len >= 5 else None,
+            "nivel_4": int(code) if code_len >= 6 else None,
+            "delito_iccs": description,
+            "seccion": current_entry["section_name"],
+        }
+        records.append(entry)
         current_entry = None
 
     i = 0
@@ -133,83 +137,65 @@ def extract_section_mapping() -> Dict[int, str]:
         if code_match and code_match.group(1).startswith(current_section):
             finalize_current()
             code = code_match.group(1)
+            inline_desc = (code_match.group(2) or "").strip()
+            desc_parts: List[str] = []
+            if pending_lines:
+                desc_parts.extend(pending_lines)
+                pending_lines = []
+            if inline_desc:
+                desc_parts.append(inline_desc)
             current_entry = {
                 "code": code,
+                "desc_parts": desc_parts,
                 "section_name": current_section_name or f"Seccion {int(current_section)}",
             }
         else:
-            # No necesitamos procesar las descripciones, solo necesitamos el mapeo
-            pass
+            attach_to_next = False
+            if current_section:
+                next_idx, next_match = _find_next_code_line(lines, i, current_section)
+                if (
+                    next_match
+                    and not (next_match.group(2) or "").strip()
+                    and next_idx is not None
+                    and next_idx - i <= 2
+                ):
+                    attach_to_next = True
+            if attach_to_next or current_entry is None:
+                pending_lines.append(line)
+            else:
+                current_entry["desc_parts"].append(line)
 
         i += 1
 
     finalize_current()
-    return mapping
-
-
-def load_parse_defs_data() -> pd.DataFrame:
-    """Loads and concatenates data from parse_defs CSV files."""
-    csv_files = list(PARSE_DEFS_DIR.glob("parse_defs_secc_*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No se encontraron archivos CSV en {PARSE_DEFS_DIR}")
-
-    df_list = [pd.read_csv(f) for f in csv_files]
-    df = pd.concat(df_list, ignore_index=True)
-    return df
+    return records
 
 
 def save_outputs(df: pd.DataFrame, base_name: str) -> None:
     """Saves the DataFrame to CSV, Excel, and JSON formats."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Ensure integer columns with possible NaNs are handled correctly
+    for col in ["nivel_1", "nivel_2", "nivel_3", "nivel_4"]:
+        if col in df.columns:
+            df[col] = df[col].astype("Int64")
+
     base_path = OUTPUT_DIR / base_name
     df.to_csv(base_path.with_suffix(".csv"), index=False)
-    df.to_excel(base_path.with_suffix(".xlsx"), index=False, sheet_name="iccs_descripcion")
+    df.to_excel(base_path.with_suffix(".xlsx"), index=False, sheet_name="iccs_tabla")
     df.to_json(base_path.with_suffix(".json"), orient="records", force_ascii=False, indent=2)
     print(f"Se generaron {len(df)} registros en CSV, Excel y JSON en {OUTPUT_DIR} con el nombre base '{base_name}'")
 
 
 def main() -> None:
-    # 1. Extract section mapping from PDF
-    print("Extrayendo mapeo de secciones desde el PDF...")
-    section_mapping = extract_section_mapping()
-    print(f"Se encontraron {len(section_mapping)} códigos con su sección correspondiente")
+    # Extract data from PDF
+    pdf_data = extract_section_data()
+    if not pdf_data:
+        raise RuntimeError("No se encontraron registros en el PDF para las secciones solicitadas.")
+    df = pd.DataFrame(pdf_data)
 
-    # 2. Manual adjustments for codes that differ between PDF and CSV
-    manual_sections = {
-        1042: "Actos que causan la muerte o que tienen la intencion de causar la muerte",
-        908: "Actos contra la seguridad publica y la seguridad del Estado"
-    }
-    section_mapping.update(manual_sections)
-    print(f"Se agregaron {len(manual_sections)} ajustes manuales para códigos que difieren entre PDF y CSV")
-
-    # 3. Load data from parse_defs CSVs
-    print("Cargando datos desde parse_defs CSVs...")
-    df_csv = load_parse_defs_data()
-    print(f"Se cargaron {len(df_csv)} registros desde los CSVs")
-
-    # 4. Add section column using the mapping
-    df_csv["seccion"] = df_csv["codigo_iccs"].map(section_mapping)
-
-    # 5. Select and reorder columns
-    final_columns = [
-        "codigo_iccs",
-        "glosa_iccs",
-        "seccion",
-        "descripcion",
-        "inclusiones",
-        "exclusiones",
-        "notas"
-    ]
-    df_final = df_csv[final_columns]
-
-    # 6. Save outputs
-    save_outputs(df_final, OUTPUT_BASENAME)
-
-    # 7. Report missing sections
-    missing_sections = df_final["seccion"].isna().sum()
-    if missing_sections > 0:
-        print(f"\nAdvertencia: {missing_sections} códigos no tienen sección asignada (no se encontraron en el PDF)")
+    # Save outputs
+    save_outputs(df, OUTPUT_BASENAME)
 
 
 if __name__ == "__main__":

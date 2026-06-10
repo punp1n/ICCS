@@ -26,9 +26,9 @@ Este README es la **guía maestra** del pipeline. La documentación está organi
 | [MODELO_DATOS.md](MODELO_DATOS.md) | Modelo de datos relacional en SQL Server (esquemas `cum` y `cods`) |
 | [AGENTS.md](AGENTS.md) | Guía para contribuir / asistentes de IA, convenciones de código |
 | [CNP/BD/README.md](CNP/BD/README.md) | Carga CNP/CUM e ICCS a SQL Server (operativo) |
-| [Correspondencia automatica/scripts/README.md](Correspondencia%20automatica/scripts/README.md) | Generación de tablas ICCS |
-| [Correspondencia automatica/embeddings/README.md](Correspondencia%20automatica/embeddings/README.md) | Embeddings y búsqueda vectorial CNP→ICCS |
-| [Correspondencia automatica/llm_filter/README.md](Correspondencia%20automatica/llm_filter/README.md) | Filtro LLM (decisión final) |
+| [Correspondencia automatica/1_iccs/README.md](Correspondencia%20automatica/1_iccs/README.md) | Generación de tablas ICCS |
+| [Correspondencia automatica/2_embeddings/README.md](Correspondencia%20automatica/2_embeddings/README.md) | Embeddings y búsqueda vectorial CNP→ICCS |
+| [Correspondencia automatica/3_llm_filter/README.md](Correspondencia%20automatica/3_llm_filter/README.md) | Filtro LLM (decisión final) |
 | [Correspondencia automatica/ENUSC/README.md](Correspondencia%20automatica/ENUSC/README.md) | Top-10 CNP/CUM por embeddings para glosas ENUSC |
 
 ---
@@ -158,14 +158,14 @@ cd ICCS
 
 ```cmd
 REM Entorno para embeddings
-cd "Correspondencia automatica\embeddings"
+cd "Correspondencia automatica\2_embeddings"
 python -m venv .venv
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
 deactivate
 
 REM Entorno para LLM
-cd ..\llm_filter
+cd ..\3_llm_filter
 python -m venv .venv
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
@@ -176,14 +176,14 @@ deactivate
 
 ```bash
 # Entorno para embeddings
-cd "Correspondencia automatica/embeddings"
+cd "Correspondencia automatica/2_embeddings"
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 deactivate
 
 # Entorno para LLM
-cd ../llm_filter
+cd ../3_llm_filter
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -246,7 +246,7 @@ python procesar_consolidado.py
 
 **Objetivo**: Generar tabla completa de códigos ICCS con descripciones, inclusiones, exclusiones y notas desde archivos CSV preprocesados con IA.
 
-**Script**: `Correspondencia automatica/scripts/generar_iccs_descripcion.py`
+**Script**: `Correspondencia automatica/1_iccs/generar_iccs_descripcion.py`
 
 **Entrada**:
 - **PDF ICCS**: `ICSS_PDF/ICCS_SPANISH_2016_web.pdf` (solo para extracción de secciones)
@@ -275,9 +275,9 @@ python procesar_consolidado.py
    - Reporta códigos sin sección asignada
 
 **Salida**:
-- `Correspondencia automatica/outputs/iccs_descripcion.csv`
-- `Correspondencia automatica/outputs/iccs_descripcion.xlsx`
-- `Correspondencia automatica/outputs/iccs_descripcion.json`
+- `Correspondencia automatica/1_iccs/outputs/iccs_descripcion.csv`
+- `Correspondencia automatica/1_iccs/outputs/iccs_descripcion.xlsx`
+- `Correspondencia automatica/1_iccs/outputs/iccs_descripcion.json`
 
 **Columnas**:
 - `codigo_iccs`: Código ICCS (ej: "0101")
@@ -290,7 +290,7 @@ python procesar_consolidado.py
 
 **Ejecución**:
 ```cmd
-cd "Correspondencia automatica\scripts"
+cd "Correspondencia automatica\1_iccs"
 python generar_iccs_descripcion.py
 ```
 
@@ -302,11 +302,11 @@ python generar_iccs_descripcion.py
 
 **Objetivo**: Generar representaciones vectoriales semánticas de CNP e ICCS y encontrar los top-k candidatos más similares para cada código CNP.
 
-**Script**: `Correspondencia automatica/embeddings/preparar_embeddings.py`
+**Script**: `Correspondencia automatica/2_embeddings/preparar_embeddings.py`
 
 **Entrada**:
 - `CNP/consolidado_CNP_2025_2021.xlsx`
-- `Correspondencia automatica/outputs/iccs_descripcion.csv`
+- `Correspondencia automatica/1_iccs/outputs/iccs_descripcion.csv`
 
 **Proceso**:
 
@@ -359,29 +359,29 @@ python generar_iccs_descripcion.py
 **Salidas**:
 
 1. **Embeddings**:
-   - `artifacts/cnp_embeddings.parquet`
-   - `artifacts/iccs_embeddings.parquet`
+   - `outputs/cnp_embeddings.parquet`
+   - `outputs/iccs_embeddings.parquet`
 
-2. **Matches Detallado** (`artifacts/matches_detallado.csv`):
+2. **Matches Detallado** (`outputs/matches_detallado.csv`):
    - Una fila por cada match (CNP × k filas)
    - Columnas: `cnp_codigo`, `cnp_glosa`, `cnp_descripcion`, `cnp_familia`, `rank`, `similarity_score`, `iccs_codigo`, `iccs_glosa`, `iccs_descripcion`, `iccs_inclusiones`
    - **Uso**: Análisis granular, filtrado por umbral de similitud
 
-3. **Matches Compacto** (`artifacts/matches_compacto.csv`):
+3. **Matches Compacto** (`outputs/matches_compacto.csv`):
    - Una fila por código CNP con candidatos en columnas
    - Columnas: `cnp_codigo`, `cnp_glosa`, `top1_codigo`, `top1_score`, `top1_glosa`, ..., `top10_codigo`, `top10_score`, `top10_glosa`
    - **Uso**: Revisión rápida de candidatos
 
-4. **Reporte Texto** (`artifacts/matches_reporte.txt`):
+4. **Reporte Texto** (`outputs/matches_reporte.txt`):
    - Primeros 20 códigos en formato legible
 
-5. **Metadata** (`artifacts/metadata_embeddings.json`):
+5. **Metadata** (`outputs/metadata_embeddings.json`):
    - Modelo usado, dispositivo, hashes de datos
 
 **Ejecución**:
 
 ```cmd
-cd "Correspondencia automatica\embeddings"
+cd "Correspondencia automatica\2_embeddings"
 .venv\Scripts\activate.bat
 
 REM Ejecución estándar (GPU, top-10)
@@ -408,11 +408,11 @@ python preparar_embeddings.py --device cpu     # Forzar CPU
 
 **Objetivo**: Aplicar razonamiento legal experto para elegir el mejor código ICCS entre los candidatos top-k, considerando exclusiones, notas y gravedad del delito.
 
-**Script**: `Correspondencia automatica/llm_filter/filtrar_con_llm.py`
+**Script**: `Correspondencia automatica/3_llm_filter/filtrar_con_llm.py`
 
 **Entrada**:
-- `Correspondencia automatica/embeddings/artifacts/matches_detallado.csv`
-- `Correspondencia automatica/outputs/iccs_descripcion.csv`
+- `Correspondencia automatica/2_embeddings/outputs/matches_detallado.csv`
+- `Correspondencia automatica/1_iccs/outputs/iccs_descripcion.csv`
 
 **Proceso**:
 
@@ -525,7 +525,7 @@ Solo responde NINGUNO si el delito es completamente genérico sin contexto sufic
 **Ejecución**:
 
 ```cmd
-cd "Correspondencia automatica\llm_filter"
+cd "Correspondencia automatica\3_llm_filter"
 .venv\Scripts\activate.bat
 
 REM Modo test (solo 10 códigos)
@@ -650,24 +650,25 @@ ICCS/
 │
 ├── Correspondencia automatica/
 │   │
-│   ├── scripts/
-│   │   └── generar_iccs_descripcion.py  # Generación de tabla ICCS
+│   ├── 1_iccs/                          # Fase 2: catálogo ICCS
+│   │   ├── generar_iccs_tabla.py
+│   │   ├── generar_iccs_descripcion.py
+│   │   └── outputs/                     # Salidas ICCS (NO subir)
+│   │       ├── iccs_tabla.csv
+│   │       ├── iccs_descripcion.csv     # Tabla ICCS completa
+│   │       ├── iccs_descripcion.xlsx
+│   │       └── iccs_descripcion.json
 │   │
 │   ├── parse_defs/                      # CSVs generados con Gemini 3.0
 │   │   ├── parse_defs_secc_01_03.csv    # Secciones 1-3 (SUBIR)
 │   │   ├── parse_defs_secc_04_08.csv    # Secciones 4-8 (SUBIR)
 │   │   └── parse_defs_secc_09_11.csv    # Secciones 9-11 (SUBIR)
 │   │
-│   ├── outputs/                         # Salidas ICCS
-│   │   ├── iccs_descripcion.csv         # Tabla ICCS completa (NO subir)
-│   │   ├── iccs_descripcion.xlsx
-│   │   └── iccs_descripcion.json
-│   │
-│   ├── embeddings/
+│   ├── 2_embeddings/                    # Fase 3: embeddings + matches
 │   │   ├── preparar_embeddings.py       # Script de embeddings
 │   │   ├── requirements.txt             # Dependencias (SUBIR)
 │   │   ├── .venv/                       # Entorno virtual (NO subir)
-│   │   └── artifacts/                   # Salidas embeddings (NO subir)
+│   │   └── outputs/                     # Salidas embeddings (NO subir)
 │   │       ├── cnp_embeddings.parquet
 │   │       ├── iccs_embeddings.parquet
 │   │       ├── matches_detallado.csv
@@ -675,7 +676,7 @@ ICCS/
 │   │       ├── matches_reporte.txt
 │   │       └── metadata_embeddings.json
 │   │
-│   ├── llm_filter/
+│   ├── 3_llm_filter/
 │   │   ├── filtrar_con_llm.py           # Script LLM
 │   │   ├── requirements.txt             # Dependencias (SUBIR)
 │   │   ├── .venv/                       # Entorno virtual (NO subir)
@@ -702,18 +703,18 @@ ICCS/
 - `README.md`
 - `.gitignore`
 - `CNP/procesar_consolidado.py`
-- `Correspondencia automatica/scripts/generar_iccs_descripcion.py`
+- `Correspondencia automatica/1_iccs/generar_iccs_descripcion.py`
 - `Correspondencia automatica/parse_defs/*.csv` (3 archivos)
-- `Correspondencia automatica/embeddings/preparar_embeddings.py`
-- `Correspondencia automatica/embeddings/requirements.txt`
-- `Correspondencia automatica/llm_filter/filtrar_con_llm.py`
-- `Correspondencia automatica/llm_filter/requirements.txt`
+- `Correspondencia automatica/2_embeddings/preparar_embeddings.py`
+- `Correspondencia automatica/2_embeddings/requirements.txt`
+- `Correspondencia automatica/3_llm_filter/filtrar_con_llm.py`
+- `Correspondencia automatica/3_llm_filter/requirements.txt`
 
 **❌ EXCLUIR (Datos, Entornos, Salidas)**:
 - `.venv/` (todos los entornos virtuales)
 - `*.xlsx`, `*.parquet`, `*.csv` (excepto `parse_defs/*.csv`)
 - `*.pdf`
-- `artifacts/`
+- `outputs/`
 - `outputs/`
 - `CNP/2025_julio/`, `CNP/2025_enero/`, etc. (carpetas de datos crudos)
 - `checkpoint.json`
@@ -727,7 +728,7 @@ ICCS/
 
 ### Salida Final Principal
 
-**Archivo**: `Correspondencia automatica/llm_filter/outputs/clasificacion_final.csv`
+**Archivo**: `Correspondencia automatica/3_llm_filter/outputs/clasificacion_final.csv`
 
 **Descripción**: Tabla compacta con la clasificación CNP→ICCS de cada delito.
 
@@ -745,9 +746,9 @@ ICCS/
 ### Salidas Intermedias
 
 1. **Consolidado CNP**: `CNP/consolidado_CNP_2025_2021.xlsx`
-2. **Descripción ICCS**: `Correspondencia automatica/outputs/iccs_descripcion.csv`
-3. **Matches Detallado**: `Correspondencia automatica/embeddings/artifacts/matches_detallado.csv`
-4. **Clasificación con Justificación**: `Correspondencia automatica/llm_filter/outputs/clasificacion_con_justificacion.csv`
+2. **Descripción ICCS**: `Correspondencia automatica/1_iccs/outputs/iccs_descripcion.csv`
+3. **Matches Detallado**: `Correspondencia automatica/2_embeddings/outputs/matches_detallado.csv`
+4. **Clasificación con Justificación**: `Correspondencia automatica/3_llm_filter/outputs/clasificacion_con_justificacion.csv`
 
 ---
 
@@ -859,7 +860,7 @@ python preparar_embeddings.py --device cpu
 ### Embeddings con baja similitud
 
 **Diagnóstico**:
-Revisar `artifacts/matches_reporte.txt` para ver scores del top-1.
+Revisar `outputs/matches_reporte.txt` para ver scores del top-1.
 
 **Ajustes**:
 ```python

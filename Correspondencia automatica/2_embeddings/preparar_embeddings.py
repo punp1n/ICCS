@@ -27,8 +27,8 @@ DEFAULT_ICCS_WEIGHTS = [0.40, 0.35, 0.20, 0.05]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CNP_PATH = REPO_ROOT / "CNP" / "consolidado_CNP_2025_2021.xlsx"
-ICCS_PATH = REPO_ROOT / "Correspondencia automatica" / "outputs" / "iccs_descripcion.csv"
-OUTPUT_DIR = Path(__file__).resolve().parent / "artifacts"
+ICCS_PATH = REPO_ROOT / "Correspondencia automatica" / "1_iccs" / "outputs" / "iccs_descripcion.csv"
+OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 
 
 def normalize_text(parts: Iterable[str]) -> str:

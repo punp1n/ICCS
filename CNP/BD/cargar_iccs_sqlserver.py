@@ -3,10 +3,10 @@
 Carga ICCS y correspondencias CUM-ICCS (manual + automatica) a SQL Server.
 
 Fuentes:
-- ICCS jerarquia: Correspondencia automatica/outputs/iccs_tabla.csv
-- ICCS metadatos: Correspondencia automatica/outputs/iccs_descripcion.csv
+- ICCS jerarquia: Correspondencia automatica/1_iccs/outputs/iccs_tabla.csv
+- ICCS metadatos: Correspondencia automatica/1_iccs/outputs/iccs_descripcion.csv
 - Correspondencia manual: Correspondencia manual/2024/04022026_TC_Final_2023-2024_v1.3.xlsx (TC_2023, TC_2024)
-- Correspondencia automatica: Correspondencia automatica/llm_filter/outputs/clasificacion_final.csv
+- Correspondencia automatica: Correspondencia automatica/3_llm_filter/outputs/clasificacion_final.csv
 """
 
 from __future__ import annotations
@@ -30,9 +30,9 @@ ENV_FILE = BD_DIR / ".env"
 SQL_MODEL_FILE = BD_DIR / "modelo_tablas_iccs_cod.sql"
 STAGING_DIR = BD_DIR / "staging_iccs"
 
-ICCS_TABLA_CSV = BASE_DIR / "Correspondencia automatica" / "outputs" / "iccs_tabla.csv"
-ICCS_DESC_CSV = BASE_DIR / "Correspondencia automatica" / "outputs" / "iccs_descripcion.csv"
-AUTO_CSV = BASE_DIR / "Correspondencia automatica" / "llm_filter" / "outputs" / "clasificacion_final.csv"
+ICCS_TABLA_CSV = BASE_DIR / "Correspondencia automatica" / "1_iccs" / "outputs" / "iccs_tabla.csv"
+ICCS_DESC_CSV = BASE_DIR / "Correspondencia automatica" / "1_iccs" / "outputs" / "iccs_descripcion.csv"
+AUTO_CSV = BASE_DIR / "Correspondencia automatica" / "3_llm_filter" / "outputs" / "clasificacion_final.csv"
 MANUAL_XLSX = (
     BASE_DIR
     / "Correspondencia manual"

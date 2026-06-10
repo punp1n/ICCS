@@ -7,7 +7,7 @@ Pipeline para preparar textos, generar embeddings y calcular matches CNP -> ICCS
 ### Desde CMD (recomendado):
 1. Abrir CMD y navegar a la carpeta del proyecto:
    ```cmd
-   cd "C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\embeddings"
+   cd "C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\2_embeddings"
    ```
 
 2. Activar el entorno virtual:
@@ -21,7 +21,7 @@ Pipeline para preparar textos, generar embeddings y calcular matches CNP -> ICCS
    ```
 
 ### Desde PowerShell:
-1. `cd "Correspondencia automatica\embeddings"`
+1. `cd "Correspondencia automatica\2_embeddings"`
 2. Activar el entorno virtual: `.\.venv\Scripts\Activate.ps1`
 3. `python preparar_embeddings.py` para generar embeddings y reportes de matches.
 
@@ -36,7 +36,7 @@ python preparar_embeddings.py [opciones]
 - `--batch-size 16` tamaño de lote para embeddings (default: 16, reducir si falta VRAM)
 - `--device cuda` fuerza GPU (default: auto-detecta cuda si está disponible)
 - `--device cpu` fuerza CPU
-- `--output-dir "ruta"` directorio de salida (default: `artifacts/`)
+- `--output-dir "ruta"` directorio de salida (default: `outputs/`)
 
 **Ejemplos:**
 ```bash
@@ -62,7 +62,7 @@ python preparar_embeddings.py --skip-embeddings
 - Espacios normalizados y hash por fila para trazabilidad.
 - **Nota**: Se utilizan TODOS los códigos ICCS independiente de su nivel jerárquico (nivel 1, 2, 3 o 4). El algoritmo k-NN seleccionará los mejores matches basándose en similitud semántica.
 
-## Salidas (carpeta artifacts/)
+## Salidas (carpeta outputs/)
 
 ### Tablas preprocesadas
 - `cnp_preparado.(parquet|csv)` textos CNP limpios con hash

@@ -8,9 +8,9 @@ import numpy as np
 from pathlib import Path
 
 # Rutas de archivos
-AUTO_PATH = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\llm_filter\outputs\clasificacion_con_justificacion.csv"
+AUTO_PATH = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\3_llm_filter\outputs\clasificacion_con_justificacion.csv"
 MANUAL_PATH = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia manual\2024\07102025_TC_Final_2023-2024_v1.2.xlsx"
-OUTPUT_PATH = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\outputs\comparacion_auto_vs_manual.xlsx"
+OUTPUT_PATH = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\3_llm_filter\outputs\comparacion_auto_vs_manual.xlsx"
 
 def normalizar_codigo_iccs(codigo):
     """Normaliza códigos ICCS removiendo puntos, guiones y convirtiendo a string."""

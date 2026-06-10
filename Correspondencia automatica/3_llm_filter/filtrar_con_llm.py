@@ -32,8 +32,8 @@ RETRY_DELAY = 2  # segundos
 
 # Rutas
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MATCHES_DETALLADO_PATH = REPO_ROOT / "Correspondencia automatica" / "embeddings" / "artifacts" / "matches_detallado.csv"
-ICCS_DESCRIPCION_PATH = REPO_ROOT / "Correspondencia automatica" / "outputs" / "iccs_descripcion.csv"
+MATCHES_DETALLADO_PATH = REPO_ROOT / "Correspondencia automatica" / "2_embeddings" / "outputs" / "matches_detallado.csv"
+ICCS_DESCRIPCION_PATH = REPO_ROOT / "Correspondencia automatica" / "1_iccs" / "outputs" / "iccs_descripcion.csv"
 CORRESP_MANUAL_PATH = REPO_ROOT / "Correspondencia manual" / "2024" / "28072025_TC_Final_2023-2024_version completa.xlsx"
 OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 

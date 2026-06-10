@@ -36,7 +36,7 @@ def main():
     """
     Función principal para cargar, comparar y reportar los resultados.
     """
-    llm_output_path = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\llm_filter\outputs\clasificacion_con_justificacion.csv"
+    llm_output_path = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia automatica\3_llm_filter\outputs\clasificacion_con_justificacion.csv"
     manual_output_path = r"C:\Users\Asvaldebenitom\OneDrive - Instituto Nacional de Estadisticas\Seguridad y justicia\ICCS\Correspondencia manual\2024\28072025_TC_Final_2023-2024_version completa.xlsx"
     manual_sheet_name = "TC_2024"
 

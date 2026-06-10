@@ -7,7 +7,7 @@ Este flujo calcula los top 10 códigos CUM/CNP para 15 glosas ENUSC sin usar LLM
 Desde la raíz del repositorio:
 
 ```bash
-PYTHONPATH="Correspondencia automatica/embeddings/.venv/lib/python3.12/site-packages" \
+PYTHONPATH="Correspondencia automatica/2_embeddings/.venv/lib/python3.12/site-packages" \
 python3 -S "Correspondencia automatica/ENUSC/generar_top10_enusc_cnp.py" --batch-size 64
 ```
 

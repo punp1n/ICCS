@@ -12,11 +12,11 @@ if sys.platform == 'win32':
 
 # Rutas
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MATCHES_PATH = Path(__file__).resolve().parent / "artifacts" / "matches_compacto.csv"
-ICCS_PATH = REPO_ROOT / "Correspondencia automatica" / "outputs" / "iccs_descripcion.csv"
+MATCHES_PATH = Path(__file__).resolve().parent / "outputs" / "matches_compacto.csv"
+ICCS_PATH = REPO_ROOT / "Correspondencia automatica" / "1_iccs" / "outputs" / "iccs_descripcion.csv"
 CNP_PATH = REPO_ROOT / "CNP" / "consolidado_CNP_2025_2021.xlsx"
-CNP_PREP_PATH = Path(__file__).resolve().parent / "artifacts" / "cnp_preparado.csv"
-ICCS_PREP_PATH = Path(__file__).resolve().parent / "artifacts" / "iccs_preparado.csv"
+CNP_PREP_PATH = Path(__file__).resolve().parent / "outputs" / "cnp_preparado.csv"
+ICCS_PREP_PATH = Path(__file__).resolve().parent / "outputs" / "iccs_preparado.csv"
 
 print("=" * 100)
 print("ANALISIS DEL PROBLEMA: CNP 702 (Homicidio) -> ICCS 101 (Homicidio intencional)")

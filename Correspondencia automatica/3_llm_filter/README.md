@@ -5,7 +5,7 @@ Pipeline de filtrado inteligente que utiliza GPT-4o-mini para elegir el mejor c�
 ## Instalación
 
 ```bash
-cd "Correspondencia automatica/llm_filter"
+cd "Correspondencia automatica/3_llm_filter"
 
 # Instalar dependencias
 pip install -r requirements.txt
@@ -106,7 +106,7 @@ Al finalizar, el script muestra:
 ## Troubleshooting
 
 **Error: "No se encuentra matches_detallado.csv"**
-→ Ejecuta primero `preparar_embeddings.py` en la carpeta embeddings
+→ Ejecuta primero `preparar_embeddings.py` en la carpeta 2_embeddings
 
 **Error de API Key**
 → Verifica que la API key de OpenAI sea válida y tenga créditos

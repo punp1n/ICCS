@@ -11,7 +11,7 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
 # Rutas
-ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
+ARTIFACTS_DIR = Path(__file__).resolve().parent / "outputs"
 OLD_MATCHES = ARTIFACTS_DIR / "matches_compacto_original.csv"  # Backup del original
 NEW_MATCHES = ARTIFACTS_DIR / "matches_compacto.csv"  # Nuevos resultados
 
