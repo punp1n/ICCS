@@ -4,7 +4,7 @@ CNP evaluables (etiqueta 1-11): **590**. Métrica: ¿la sección del código ICC
 
 | Configuración | n | top-1 | top-3 | recall@10 |
 |---|---:|---:|---:|---:|
-| qwen3 (embeddings) | 590 | 0.597 | 0.788 | 0.922 |
-| qwen3 + rerank | 590 | 0.578 | 0.814 | 0.903 |
-| e5 (embeddings) | 590 | 0.573 | 0.773 | 0.912 |
+| qwen3 (embeddings) | 590 | 0.641 | 0.785 | 0.908 |
+| qwen3 + rerank | 590 | 0.605 | 0.788 | 0.908 |
+| e5 (embeddings) | 590 | 0.610 | 0.771 | 0.902 |
 | e5 + rerank | 590 | 0.571 | 0.783 | 0.883 |

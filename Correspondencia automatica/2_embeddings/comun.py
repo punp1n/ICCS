@@ -41,6 +41,7 @@ EMBED_MODELS = {
     "e5": "intfloat/multilingual-e5-large",
 }
 RERANKER_DEFAULT = "BAAI/bge-reranker-v2-m3"
+ICCS_SECTION_REPEAT = 2
 
 # Instrucción para la query de Qwen3-Embedding (retrieval asimétrico)
 QWEN3_TASK = (
@@ -157,9 +158,13 @@ def load_iccs(path: Path = ICCS_DESC_PATH) -> pd.DataFrame:
     iccs["codigo_iccs"] = iccs["codigo_iccs"].astype(str)
 
     def _build(row: pd.Series) -> str:
-        parts = [row["glosa_iccs"], row["descripcion"], row["inclusiones"]]
-        if str(row["seccion"]).strip():
-            parts.append(f"Sección {row['seccion']}")
+        parts = [row["glosa_iccs"]]
+        seccion = str(row["seccion"]).strip()
+        if seccion:
+            parts.append(f"Seccion ICCS: {seccion}")
+        parts.extend([row["descripcion"], row["inclusiones"]])
+        if seccion:
+            parts.extend([f"Marco ICCS: {seccion}"] * max(0, ICCS_SECTION_REPEAT - 1))
         return normalize_text(parts)
 
     iccs["texto"] = iccs.apply(_build, axis=1)
